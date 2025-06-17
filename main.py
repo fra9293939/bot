@@ -32,7 +32,7 @@ async def buongiorno():
 async def buonanotte():
     try:
         canale = await bot.fetch_channel(CHANNEL_ID)
-        await canale.send("Buonanotte belli, a domani, spero vi siate divertiti quest'oggi, dormite bene! 🌝 @everyone")
+        await canale.send("Buonanotte belli, a domani, dormite bene! 🌝 @everyone")
     except Exception as e:
         print(f"❌ Errore invio buonanotte: {e}")
 
