@@ -100,7 +100,7 @@ async def on_ready():
 async def buongiorno():
     try:
         canale = await bot.fetch_channel(CHANNEL_ID)
-        await canale.send("Buongiorno belli, come state? Buona giornata! 🌞 @everyone")
+        await canale.send("Buongiorno belli🥰!")
     except Exception as e:
         print(f"❌ Errore invio buongiorno: {e}")
 
@@ -108,7 +108,7 @@ async def buongiorno():
 async def buonanotte():
     try:
         canale = await bot.fetch_channel(CHANNEL_ID)
-        await canale.send("Buonanotte belli, a domani, dormite bene! 🌝 @everyone")
+        await canale.send("Buonanotte belli!🥰")
     except Exception as e:
         print(f"❌ Errore invio buonanotte: {e}")
 
