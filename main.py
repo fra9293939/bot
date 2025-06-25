@@ -84,9 +84,12 @@ async def comandi(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
-
+    
 @bot.command()
 async def send(ctx, message):
+    if not ctx.author.guild_permissions.manage_messages:
+        return
+    
     await ctx.send(message)
     
 @bot.event
