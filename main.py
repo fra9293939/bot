@@ -85,7 +85,7 @@ async def comandi(ctx):
     )
     await ctx.send(embed=embed)
     
-@bot.command()
+@bot.command(name="send")
 async def send(ctx, message):
     if not ctx.author.guild_permissions.manage_messages:
         return
