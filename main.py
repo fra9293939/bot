@@ -92,7 +92,7 @@ async def on_ready():
     
     # Manda il messaggio nel canale indicato
     canale = await bot.fetch_channel(733974953862365234)
-    await canale.send("CIAO MMOI <@462575208675672064>")
+    await canale.send("FEIR FOCS <@462575208675672064>")
 
 
 keep_alive()
