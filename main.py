@@ -85,6 +85,10 @@ async def comandi(ctx):
     )
     await ctx.send(embed=embed)
 
+@bot.command()
+async def send(ctx, message):
+    await ctx.send(message)
+    
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
