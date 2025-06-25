@@ -86,10 +86,11 @@ async def comandi(ctx):
     await ctx.send(embed=embed)
     
 @bot.command(name="send")
-async def send(ctx, message):
+async def send(ctx, *, message):
     if not ctx.author.guild_permissions.manage_messages:
         return
-    
+
+    await ctx.message.delete()
     await ctx.send(message)
     
 @bot.event
