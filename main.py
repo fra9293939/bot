@@ -86,12 +86,24 @@ async def comandi(ctx):
     await ctx.send(embed=embed)
     
 @bot.command(name="send")
-async def send(ctx, *, message):
+async def send(ctx, *, message: str = None):
     if not ctx.author.guild_permissions.manage_messages:
         return
 
     await ctx.message.delete()
-    await ctx.send(message)
+
+    # Prepara gli allegati (se ci sono)
+    files = []
+    for attachment in ctx.message.attachments:
+        file = await attachment.to_file()
+        files.append(file)
+
+    # Invia il messaggio e gli allegati
+    if message or files:
+        await ctx.send(content=message, files=files)
+    else:
+        await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+
     
 @bot.event
 async def on_ready():
