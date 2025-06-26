@@ -86,12 +86,13 @@ async def comandi(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
+    
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
+        await ctx.send("❌ Non hai i permessi per usare questo comando.")
         return
 
-    # Prima scarica gli allegati
     files = []
     if ctx.message.attachments:
         try:
@@ -100,10 +101,16 @@ async def send(ctx, *, message=None):
             await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
             return
 
-    # Poi cancella il messaggio originale
-    await ctx.message.delete()
+    # Cancellazione sicura del messaggio originale
+    try:
+        await ctx.message.delete()
+    except discord.NotFound:
+        pass
+    except discord.Forbidden:
+        await ctx.send("❌ Non ho i permessi per eliminare il messaggio.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Errore durante l'eliminazione del messaggio: {e}")
 
-    # Invia il messaggio con testo e/o file
     if message or files:
         await ctx.send(content=message, files=files)
     else:
