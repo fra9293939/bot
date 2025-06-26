@@ -84,27 +84,23 @@ async def comandi(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
-    
-@bot.command(name="send")
-async def send(ctx, *, message: str = None):
+   @bot.command(name="send")
+async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
         return
 
     await ctx.message.delete()
 
-    # Prepara gli allegati (se ci sono)
     files = []
-    for attachment in ctx.message.attachments:
-        file = await attachment.to_file()
-        files.append(file)
+    if ctx.message.attachments:
+        files = [await attachment.to_file() for attachment in ctx.message.attachments]
 
-    # Invia il messaggio e gli allegati
+    # Manda messaggio con testo e/o allegati
     if message or files:
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-    
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
