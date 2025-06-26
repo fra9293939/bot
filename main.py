@@ -86,18 +86,24 @@ async def comandi(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
-
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
         return
 
-    await ctx.message.delete()
-
+    # Prima scarica gli allegati
     files = []
     if ctx.message.attachments:
-        files = [await attachment.to_file() for attachment in ctx.message.attachments]
+        try:
+            files = [await attachment.to_file() for attachment in ctx.message.attachments]
+        except Exception as e:
+            await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
+            return
 
+    # Poi cancella il messaggio originale
+    await ctx.message.delete()
+
+    # Invia il messaggio con testo e/o file
     if message or files:
         await ctx.send(content=message, files=files)
     else:
