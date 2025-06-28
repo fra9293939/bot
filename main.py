@@ -14,7 +14,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Canali classifica (modifica con i tuoi ID)
 CHANNEL_DAILY = 1388623669886189628
-CHANNEL_WEEKLY = 1388623669886189628  # se vuoi lo stesso canale, altrimenti cambia
+CHANNEL_WEEKLY = 1388623669886189628  # stesso canale o cambia
 CHANNEL_MONTHLY = 1388623669886189628
 
 # Canale per messaggi level up (modifica con tuo ID)
@@ -155,9 +155,31 @@ async def send_leaderboards():
         except Exception as e:
             print(f"Errore invio classifica in {guild.name}: {e}")
 
+@bot.command(name="testxp")
+async def test_xp(ctx):
+    user_id = ctx.author.id
+
+    # Aggiunge 100 XP (giornalieri, settimanali e mensili) per test
+    xp_daily[user_id] += 100
+    xp_weekly[user_id] += 100
+    xp_monthly[user_id] += 100
+
+    # Aggiorna i ruoli basandosi sull'XP mensile
+    total_xp = xp_monthly[user_id]
+    await update_roles(ctx.author, total_xp)
+
+    await ctx.send(f"🎉 {ctx.author.display_name}, ti ho aggiunto 100 XP e aggiornato i ruoli! XP totali mensili: {total_xp}")
+
+@bot.command(name="classifica")
+async def classifica(ctx):
+    # Mostra la classifica mensile nel canale dove viene invocato
+    embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
+    await ctx.send(embed=embed)
+
 @bot.event
 async def on_ready():
     print(f"Bot pronto come {bot.user}")
     send_leaderboards.start()
 
 bot.run(TOKEN)
+
