@@ -3,13 +3,14 @@ from discord.ext import commands
 import os
 from keep_alive import keep_alive
 
-import io
-
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True  # per accedere ai membri
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- Comandi social (il tuo codice originale) ---
 
 @bot.command(name="twitch")
 async def twitch(ctx):
@@ -81,12 +82,13 @@ async def comandi(ctx):
             "!instagram / !ig - Link Instagram\n"
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
-            "!comandi - Questa lista"
+            "!comandi - Questa lista\n"
+            "!topmessaggi - Classifica messaggi top 10"
         ),
         color=0xB500FF
     )
     await ctx.send(embed=embed)
-    
+
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
@@ -101,7 +103,6 @@ async def send(ctx, *, message=None):
             await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
             return
 
-    # Cancellazione sicura del messaggio originale
     try:
         await ctx.message.delete()
     except discord.NotFound:
@@ -115,6 +116,41 @@ async def send(ctx, *, message=None):
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+
+# --- Nuovo comando topmessaggi ---
+
+@bot.command(name="topmessaggi")
+async def topmessaggi(ctx):
+    # Canale dove inviare la classifica (modifica qui)
+    target_channel_id = 1388623669886189628
+    target_channel = bot.get_channel(target_channel_id)
+    if target_channel is None:
+        await ctx.send("❌ Canale per la classifica non trovato!")
+        return
+
+    # Conta messaggi per utente solo nella cache (ultimi messaggi caricati)
+    counts = {}
+    async for message in ctx.channel.history(limit=1000):
+        if message.author.bot:
+            continue
+        counts[message.author.id] = counts.get(message.author.id, 0) + 1
+
+    # Prendi i top 10 per messaggi
+    top10 = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    embed = discord.Embed(
+        title="🏆 Classifica Top 10 Messaggi (ultimi 1000 messaggi canale)",
+        color=0xB500FF,
+    )
+    for i, (user_id, msg_count) in enumerate(top10, start=1):
+        user = ctx.guild.get_member(user_id)
+        if user:
+            embed.add_field(name=f"#{i} - {user.display_name}", value=f"Messaggi: {msg_count}", inline=False)
+        else:
+            embed.add_field(name=f"#{i} - Utente sconosciuto", value=f"Messaggi: {msg_count}", inline=False)
+
+    await target_channel.send(embed=embed)
+    await ctx.message.add_reaction("✅")
 
 @bot.event
 async def on_ready():
