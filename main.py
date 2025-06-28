@@ -176,6 +176,16 @@ async def classifica(ctx):
     embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
     await ctx.send(embed=embed)
 
+# --- NUOVO COMANDO RESET XP ---
+@bot.command(name="resetxp")
+@commands.has_permissions(administrator=True)
+async def reset_xp(ctx):
+    xp_daily.clear()
+    xp_weekly.clear()
+    xp_monthly.clear()
+    save_xp()
+    await ctx.send("✅ XP resettati per tutti! Ora puoi riassegnare i ruoli manualmente e ricominciare da zero.")
+
 # Social
 # (Tutti i tuoi comandi social qui... lasciati invariati)
 
@@ -190,4 +200,3 @@ if __name__ == "__main__":
     load_xp()
     keep_alive()
     bot.run(TOKEN)
-
