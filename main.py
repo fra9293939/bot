@@ -10,7 +10,7 @@ intents.message_content = True
 intents.members = True  # per accedere ai membri
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- Comandi social (il tuo codice originale) ---
+# --- Comandi social ---
 
 @bot.command(name="twitch")
 async def twitch(ctx):
@@ -117,25 +117,26 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-# --- Nuovo comando topmessaggi ---
+# --- Comando top messaggi ---
 
 @bot.command(name="topmessaggi")
 async def topmessaggi(ctx):
-    # Canale dove inviare la classifica (modifica qui)
     target_channel_id = 1388623669886189628
     target_channel = bot.get_channel(target_channel_id)
     if target_channel is None:
         await ctx.send("❌ Canale per la classifica non trovato!")
         return
 
-    # Conta messaggi per utente solo nella cache (ultimi messaggi caricati)
     counts = {}
-    async for message in ctx.channel.history(limit=1000):
-        if message.author.bot:
-            continue
-        counts[message.author.id] = counts.get(message.author.id, 0) + 1
+    try:
+        async for message in ctx.channel.history(limit=1000):
+            if message.author.bot:
+                continue
+            counts[message.author.id] = counts.get(message.author.id, 0) + 1
+    except discord.Forbidden:
+        await ctx.send("❌ Non ho i permessi per leggere la cronologia di questo canale.")
+        return
 
-    # Prendi i top 10 per messaggi
     top10 = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
     embed = discord.Embed(
@@ -143,9 +144,9 @@ async def topmessaggi(ctx):
         color=0xB500FF,
     )
     for i, (user_id, msg_count) in enumerate(top10, start=1):
-        user = ctx.guild.get_member(user_id)
-        if user:
-            embed.add_field(name=f"#{i} - {user.display_name}", value=f"Messaggi: {msg_count}", inline=False)
+        member = ctx.guild.get_member(user_id)
+        if member:
+            embed.add_field(name=f"#{i} - {member.display_name}", value=f"Messaggi: {msg_count}", inline=False)
         else:
             embed.add_field(name=f"#{i} - Utente sconosciuto", value=f"Messaggi: {msg_count}", inline=False)
 
