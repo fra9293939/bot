@@ -1,60 +1,62 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
-from zoneinfo import ZoneInfo  # per gestire i fusi orari
+from zoneinfo import ZoneInfo  # Python 3.9+
+
+from keep_alive import keep_alive  # Assumi che il tuo keep_alive funzioni
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # per accedere ai membri
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- Configurazioni canali e ruoli ---
-
+# Configurazioni canali e ruoli (metti i tuoi ID reali)
 CHANNEL_DAILY = 1388623669886189628
 CHANNEL_WEEKLY = 1388623669886189628
 CHANNEL_MONTHLY = 1388623669886189628
 CHANNEL_LEVELUP = 1383429600016728074
 
-XP_COLOR = 0xB500FF
-
 ROLE_LEVELS = {
-    0: 11383431607498571796,        # Ruolo base
-    10: 1383433321630924922,        # Livello 10
-    20: 1383433334343860324,        # Livello 20
-    40: 1383433340715139244,        # Livello 40
-    60: 1383433337959481384,        # Livello 60
-    80: 1386849486948798535,        # Livello 80
-    100: 1383433343651020904,       # Livello 100
+    0: 11383431607498571796,
+    10: 1383433321630924922,
+    20: 1383433334343860324,
+    40: 1383433340715139244,
+    60: 1383433337959481384,
+    80: 1386849486948798535,
+    100: 1383433343651020904,
 }
 
-# --- XP in memoria ---
+XP_COLOR = 0xB500FF
+TIMEZONE = ZoneInfo("Europe/Rome")
+
+# Dati XP in memoria
 xp_daily = defaultdict(int)
 xp_weekly = defaultdict(int)
 xp_monthly = defaultdict(int)
 
-TIMEZONE = ZoneInfo("Europe/Rome")
 last_daily_reset = datetime.now(TIMEZONE)
 last_weekly_reset = datetime.now(TIMEZONE)
 last_monthly_reset = datetime.now(TIMEZONE)
 
-# --- Funzioni XP e reset ---
+scheduler = AsyncIOScheduler()
 
 def check_resets():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
-    
+
     if (now - last_daily_reset) > timedelta(days=1):
         xp_daily.clear()
         last_daily_reset = now
-    
+
     if now.isocalendar()[1] != last_weekly_reset.isocalendar()[1]:
         xp_weekly.clear()
         last_weekly_reset = now
-    
+
     if now.month != last_monthly_reset.month:
         xp_monthly.clear()
         last_monthly_reset = now
@@ -69,31 +71,26 @@ async def update_roles(member, total_xp):
     eligible_roles = [(xp_req, role_id) for xp_req, role_id in ROLE_LEVELS.items() if total_xp >= xp_req]
     if not eligible_roles:
         return
-
     max_xp_req, role_id_to_add = max(eligible_roles, key=lambda x: x[0])
     role_to_add = guild.get_role(role_id_to_add)
-    if not role_to_add:
-        return
-
-    if role_to_add in member.roles:
+    if not role_to_add or role_to_add in member.roles:
         return
 
     try:
-        await member.add_roles(role_to_add, reason="Aggiornamento ruolo per XP")
+        await member.add_roles(role_to_add, reason="Aggiornamento ruolo XP")
         print(f"Ruolo {role_to_add.name} assegnato a {member.display_name}")
-
-        levelup_channel = guild.get_channel(CHANNEL_LEVELUP)
-        if levelup_channel:
+        channel = guild.get_channel(CHANNEL_LEVELUP)
+        if channel:
             embed = discord.Embed(
-                title="🎉 Complimenti! Nuovo livello raggiunto!",
+                title="🎉 Nuovo livello raggiunto!",
                 description=f"{member.mention} ha raggiunto il ruolo **{role_to_add.name}**!",
                 color=XP_COLOR,
                 timestamp=datetime.now(TIMEZONE)
             )
             embed.set_thumbnail(url=member.display_avatar.url)
-            await levelup_channel.send(embed=embed)
+            await channel.send(embed=embed)
     except Exception as e:
-        print(f"Errore assegnazione ruolo a {member.display_name}: {e}")
+        print(f"Errore assegnazione ruolo: {e}")
 
 def create_leaderboard_embed(title, xp_dict, guild):
     top = sorted(xp_dict.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -107,17 +104,24 @@ def create_leaderboard_embed(title, xp_dict, guild):
         embed.add_field(name=f"#{i} - {name}", value=f"XP: {xp}", inline=False)
     return embed
 
-@tasks.loop(minutes=5)
+@bot.event
+async def on_message(message):
+    if message.author.bot or message.channel.type == discord.ChannelType.private:
+        return
+    check_resets()
+    add_xp(message.author.id)
+    total_xp = xp_monthly[message.author.id]
+    await update_roles(message.author, total_xp)
+    await bot.process_commands(message)
+
 async def send_leaderboards():
     for guild in bot.guilds:
         ch_daily = guild.get_channel(CHANNEL_DAILY)
         ch_weekly = guild.get_channel(CHANNEL_WEEKLY)
         ch_monthly = guild.get_channel(CHANNEL_MONTHLY)
-
         if not all([ch_daily, ch_weekly, ch_monthly]):
-            print(f"Uno o più canali non trovati nel server {guild.name}")
+            print(f"Canali non trovati in {guild.name}")
             continue
-
         try:
             await ch_daily.send(embed=create_leaderboard_embed("🏆 Classifica Giornaliera XP", xp_daily, guild))
             await ch_weekly.send(embed=create_leaderboard_embed("🏆 Classifica Settimanale XP", xp_weekly, guild))
@@ -125,41 +129,22 @@ async def send_leaderboards():
         except Exception as e:
             print(f"Errore invio classifica in {guild.name}: {e}")
 
-# --- Eventi e comandi XP ---
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    if message.channel.type == discord.ChannelType.private:
-        return
-
-    check_resets()
-    add_xp(message.author.id)
-
-    total_xp = xp_monthly[message.author.id]
-    await update_roles(message.author, total_xp)
-
-    await bot.process_commands(message)
-
 @bot.command(name="testxp")
 async def test_xp(ctx):
     user_id = ctx.author.id
     xp_daily[user_id] += 100
     xp_weekly[user_id] += 100
     xp_monthly[user_id] += 100
-
     total_xp = xp_monthly[user_id]
     await update_roles(ctx.author, total_xp)
-
-    await ctx.send(f"🎉 {ctx.author.display_name}, ti ho aggiunto 100 XP e aggiornato i ruoli! XP totali mensili: {total_xp}")
+    await ctx.send(f"🎉 {ctx.author.display_name}, ti ho aggiunto 100 XP! Totale mensile: {total_xp}")
 
 @bot.command(name="classifica")
 async def classifica(ctx):
     embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
     await ctx.send(embed=embed)
 
-# --- Comandi social e utility ---
+# --- Comandi social ---
 
 @bot.command(name="twitch")
 async def twitch(ctx):
@@ -232,7 +217,8 @@ async def comandi(ctx):
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
             "!comandi - Questa lista\n"
-            "!topmessaggi - Classifica messaggi top 10"
+            "!testxp - Aggiungi XP di test\n"
+            "!classifica - Classifica mensile XP"
         ),
         color=XP_COLOR
     )
@@ -249,7 +235,7 @@ async def send(ctx, *, message=None):
         try:
             files = [await attachment.to_file() for attachment in ctx.message.attachments]
         except Exception as e:
-            await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
+            await ctx.send(f"❌ Errore caricamento allegati: {e}")
             return
 
     try:
@@ -257,5 +243,24 @@ async def send(ctx, *, message=None):
     except discord.NotFound:
         pass
     except discord.Forbidden:
-        await ctx
+        await ctx.send("❌ Non ho i permessi per eliminare il messaggio.")
+        return
+    except Exception as e:
+        await ctx.send(f"⚠️ Errore eliminazione messaggio: {e}")
+        return
+
+    if message or files:
+        await ctx.send(content=message, files=files)
+    else:
+        await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+
+@bot.event
+async def on_ready():
+    print(f"✅ Bot attivo come {bot.user}")
+    scheduler.add_job(send_leaderboards, 'cron', day_of_week='mon', hour=8, minute=0)
+    scheduler.start()
+
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(TOKEN)
 
