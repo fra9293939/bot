@@ -9,32 +9,18 @@ TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True
+intents.members = True  # per accedere ai membri
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Canali classifica (modifica con i tuoi ID)
-CHANNEL_DAILY = 1388623669886189628
-CHANNEL_WEEKLY = 1388623669886189628  # stesso canale o cambia
-CHANNEL_MONTHLY = 1388623669886189628
+# --- Configurazioni canali e ruoli ---
 
-# Canale per messaggi level up (modifica con tuo ID)
+CHANNEL_DAILY = 1388623669886189628
+CHANNEL_WEEKLY = 1388623669886189628
+CHANNEL_MONTHLY = 1388623669886189628
 CHANNEL_LEVELUP = 1383429600016728074
 
 XP_COLOR = 0xB500FF
 
-# XP in memoria
-xp_daily = defaultdict(int)
-xp_weekly = defaultdict(int)
-xp_monthly = defaultdict(int)
-
-# Settiamo l'ora di Roma per i reset
-TIMEZONE = ZoneInfo("Europe/Rome")
-
-last_daily_reset = datetime.now(TIMEZONE)
-last_weekly_reset = datetime.now(TIMEZONE)
-last_monthly_reset = datetime.now(TIMEZONE)
-
-# Mappa ruoli e livelli (modifica con i tuoi ID reali)
 ROLE_LEVELS = {
     0: 11383431607498571796,        # Ruolo base
     10: 1383433321630924922,        # Livello 10
@@ -45,35 +31,41 @@ ROLE_LEVELS = {
     100: 1383433343651020904,       # Livello 100
 }
 
-def reset_xp():
-    global xp_daily, xp_weekly, xp_monthly
-    xp_daily.clear()
-    xp_weekly.clear()
-    xp_monthly.clear()
+# --- XP in memoria ---
+xp_daily = defaultdict(int)
+xp_weekly = defaultdict(int)
+xp_monthly = defaultdict(int)
+
+TIMEZONE = ZoneInfo("Europe/Rome")
+last_daily_reset = datetime.now(TIMEZONE)
+last_weekly_reset = datetime.now(TIMEZONE)
+last_monthly_reset = datetime.now(TIMEZONE)
+
+# --- Funzioni XP e reset ---
 
 def check_resets():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
     
-    # Reset giornaliero dopo 1 giorno
     if (now - last_daily_reset) > timedelta(days=1):
         xp_daily.clear()
         last_daily_reset = now
     
-    # Reset settimanale se cambia settimana ISO
     if now.isocalendar()[1] != last_weekly_reset.isocalendar()[1]:
         xp_weekly.clear()
         last_weekly_reset = now
     
-    # Reset mensile se cambia mese
     if now.month != last_monthly_reset.month:
         xp_monthly.clear()
         last_monthly_reset = now
 
+def add_xp(user_id):
+    xp_daily[user_id] += 10
+    xp_weekly[user_id] += 10
+    xp_monthly[user_id] += 10
+
 async def update_roles(member, total_xp):
     guild = member.guild
-
-    # Trova il ruolo più alto che l'utente può avere con XP attuale
     eligible_roles = [(xp_req, role_id) for xp_req, role_id in ROLE_LEVELS.items() if total_xp >= xp_req]
     if not eligible_roles:
         return
@@ -90,7 +82,6 @@ async def update_roles(member, total_xp):
         await member.add_roles(role_to_add, reason="Aggiornamento ruolo per XP")
         print(f"Ruolo {role_to_add.name} assegnato a {member.display_name}")
 
-        # Manda messaggio congratulazioni nel canale level up
         levelup_channel = guild.get_channel(CHANNEL_LEVELUP)
         if levelup_channel:
             embed = discord.Embed(
@@ -103,27 +94,6 @@ async def update_roles(member, total_xp):
             await levelup_channel.send(embed=embed)
     except Exception as e:
         print(f"Errore assegnazione ruolo a {member.display_name}: {e}")
-
-def add_xp(user_id):
-    xp_daily[user_id] += 10
-    xp_weekly[user_id] += 10
-    xp_monthly[user_id] += 10
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    if message.channel.type == discord.ChannelType.private:
-        return
-
-    check_resets()
-    add_xp(message.author.id)
-
-    total_xp = xp_monthly[message.author.id]
-    member = message.author
-    await update_roles(member, total_xp)
-
-    await bot.process_commands(message)
 
 def create_leaderboard_embed(title, xp_dict, guild):
     top = sorted(xp_dict.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -155,16 +125,30 @@ async def send_leaderboards():
         except Exception as e:
             print(f"Errore invio classifica in {guild.name}: {e}")
 
+# --- Eventi e comandi XP ---
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    if message.channel.type == discord.ChannelType.private:
+        return
+
+    check_resets()
+    add_xp(message.author.id)
+
+    total_xp = xp_monthly[message.author.id]
+    await update_roles(message.author, total_xp)
+
+    await bot.process_commands(message)
+
 @bot.command(name="testxp")
 async def test_xp(ctx):
     user_id = ctx.author.id
-
-    # Aggiunge 100 XP (giornalieri, settimanali e mensili) per test
     xp_daily[user_id] += 100
     xp_weekly[user_id] += 100
     xp_monthly[user_id] += 100
 
-    # Aggiorna i ruoli basandosi sull'XP mensile
     total_xp = xp_monthly[user_id]
     await update_roles(ctx.author, total_xp)
 
@@ -172,14 +156,106 @@ async def test_xp(ctx):
 
 @bot.command(name="classifica")
 async def classifica(ctx):
-    # Mostra la classifica mensile nel canale dove viene invocato
     embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
     await ctx.send(embed=embed)
 
-@bot.event
-async def on_ready():
-    print(f"Bot pronto come {bot.user}")
-    send_leaderboards.start()
+# --- Comandi social e utility ---
 
-bot.run(TOKEN)
+@bot.command(name="twitch")
+async def twitch(ctx):
+    embed = discord.Embed(
+        title="🎮 Twitch di Tw3nty Mars",
+        description="[Clicca qui per visitare il canale Twitch](https://www.twitch.tv/tw3nty_mars?sr=a)",
+        color=XP_COLOR
+    )
+    embed.set_thumbnail(url="https://static.twitchcdn.net/assets/favicon-32-e29e246c157142c94346.png")
+    await ctx.send(embed=embed)
+
+@bot.command(name="youtube", aliases=["yt"])
+async def youtube(ctx):
+    embed = discord.Embed(
+        title="▶️ Canale YouTube di Tw3nty Mars",
+        description="[Guarda i video qui](https://www.youtube.com/channel/UC6E0F7DUBbF2ZP6GRV8cHFg)",
+        color=XP_COLOR
+    )
+    embed.set_thumbnail(url="https://www.youtube.com/s/desktop/6ee67e1a/img/favicon_32.png")
+    await ctx.send(embed=embed)
+
+@bot.command(name="tiktok")
+async def tiktok(ctx):
+    embed = discord.Embed(
+        title="📱 TikTok di Tw3nty Mars",
+        description=(
+            "Profilo per le live: [tw3ntymars](https://www.tiktok.com/@tw3ntymars)\n"
+            "Profilo personale: [martinaastasi](https://www.tiktok.com/@martinaastasi)"
+        ),
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="instagram", aliases=["ig"])
+async def instagram(ctx):
+    embed = discord.Embed(
+        title="📸 Instagram di Tw3nty Mars",
+        description="[Visita il profilo Instagram](https://www.instagram.com/tw3nty_mars)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="discord", aliases=["ds"])
+async def discord_cmd(ctx):
+    embed = discord.Embed(
+        title="💬 Server Discord",
+        description="[Unisciti qui!](https://discord.gg/xKqWsTYRqy)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="orari")
+async def orari(ctx):
+    embed = discord.Embed(
+        title="📅 Streaming Schedule",
+        description="TUTTI I GIORNI DALLE 18:00 ALLE 21:00🕑 (salvo imprevisti, vi avvisiamo su ig e ds)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="comandi")
+async def comandi(ctx):
+    embed = discord.Embed(
+        title="📜 Lista comandi",
+        description=(
+            "!twitch - Link Twitch\n"
+            "!youtube / !yt - Link YouTube\n"
+            "!tiktok - Link TikTok\n"
+            "!instagram / !ig - Link Instagram\n"
+            "!discord / !ds - Link Discord\n"
+            "!orari - Orario streaming\n"
+            "!comandi - Questa lista\n"
+            "!topmessaggi - Classifica messaggi top 10"
+        ),
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="send")
+async def send(ctx, *, message=None):
+    if not ctx.author.guild_permissions.manage_messages:
+        await ctx.send("❌ Non hai i permessi per usare questo comando.")
+        return
+
+    files = []
+    if ctx.message.attachments:
+        try:
+            files = [await attachment.to_file() for attachment in ctx.message.attachments]
+        except Exception as e:
+            await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
+            return
+
+    try:
+        await ctx.message.delete()
+    except discord.NotFound:
+        pass
+    except discord.Forbidden:
+        await ctx
 
