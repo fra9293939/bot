@@ -138,6 +138,12 @@ def create_leaderboard_embed(title, xp_dict, guild):
 async def on_message(message):
     if message.author.bot or message.channel.type == discord.ChannelType.private:
         return
+
+    now = datetime.now(TIMEZONE)
+    msg_time = message.created_at.replace(tzinfo=ZoneInfo("UTC")).astimezone(TIMEZONE)
+    if (now - msg_time).total_seconds() > 300:  # ignora messaggi più vecchi di 5 minuti
+        return
+
     check_resets()
     add_xp(message.author.id)
     total_xp = xp_monthly[message.author.id]
@@ -176,7 +182,50 @@ async def classifica(ctx):
     embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
     await ctx.send(embed=embed)
 
-# --- NUOVO COMANDO RESET XP ---
+@bot.command(name="day")
+async def day(ctx):
+    embed = create_leaderboard_embed("🏆 Classifica Giornaliera XP", xp_daily, ctx.guild)
+    await ctx.send(embed=embed)
+
+@bot.command(name="week")
+async def week(ctx):
+    embed = create_leaderboard_embed("🏆 Classifica Settimanale XP", xp_weekly, ctx.guild)
+    await ctx.send(embed=embed)
+
+@bot.command(name="month")
+async def month(ctx):
+    embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
+    await ctx.send(embed=embed)
+
+@bot.command(name="rank")
+async def rank(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    user_id = member.id
+
+    total_xp = xp_monthly.get(user_id, 0)
+    guild = ctx.guild
+
+    # Calcola posizione in classifica mensile
+    sorted_xp = sorted(xp_monthly.items(), key=lambda x: x[1], reverse=True)
+    position = None
+    for i, (uid, xp) in enumerate(sorted_xp, start=1):
+        if uid == user_id:
+            position = i
+            break
+    if position is None:
+        position = "Non classificato"
+
+    embed = discord.Embed(
+        title=f"📊 Statistiche XP di {member.display_name}",
+        color=XP_COLOR,
+        timestamp=datetime.now(TIMEZONE)
+    )
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name="XP Mensile", value=str(total_xp))
+    embed.add_field(name="Posizione in classifica", value=str(position))
+    await ctx.send(embed=embed)
+
+# --- COMANDO RESET XP e RUOLI ---
 @bot.command(name="resetxp")
 @commands.has_permissions(administrator=True)
 async def reset_xp(ctx):
@@ -184,7 +233,21 @@ async def reset_xp(ctx):
     xp_weekly.clear()
     xp_monthly.clear()
     save_xp()
-    await ctx.send("✅ XP resettati per tutti! Ora puoi riassegnare i ruoli manualmente e ricominciare da zero.")
+
+    # Rimuovi ruoli XP da tutti i membri
+    for member in ctx.guild.members:
+        roles_to_remove = []
+        for xp_req, role_id in ROLE_LEVELS.items():
+            role = ctx.guild.get_role(role_id)
+            if role in member.roles:
+                roles_to_remove.append(role)
+        if roles_to_remove:
+            try:
+                await member.remove_roles(*roles_to_remove, reason="Reset XP e ruoli")
+            except Exception as e:
+                print(f"Errore rimuovendo ruoli da {member.display_name}: {e}")
+
+    await ctx.send("✅ XP e ruoli resettati per tutti! Ora puoi riassegnare i ruoli manualmente e ricominciare da zero.")
 
 # Social
 # (Tutti i tuoi comandi social qui... lasciati invariati)
