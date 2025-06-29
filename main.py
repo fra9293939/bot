@@ -125,14 +125,17 @@ async def check_level_up(user_id: int, member: discord.Member, new_level: int):
 
 # --- DATABASE SAVE / LOAD ---
 
+def convert_keys_to_str(d):
+    return {str(k): v for k, v in d.items()}
+
 def save_data():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     data = {
         "_id": "xp_data",
-        "xp_daily": dict(xp_daily),
-        "xp_weekly": dict(xp_weekly),
-        "xp_monthly": dict(xp_monthly),
-        "user_total_xp": dict(user_total_xp),
+        "xp_daily": convert_keys_to_str(dict(xp_daily)),
+        "xp_weekly": convert_keys_to_str(dict(xp_weekly)),
+        "xp_monthly": convert_keys_to_str(dict(xp_monthly)),
+        "user_total_xp": convert_keys_to_str(dict(user_total_xp)),
         "last_daily_reset": last_daily_reset.isoformat() if last_daily_reset else None,
         "last_weekly_reset": last_weekly_reset.isoformat() if last_weekly_reset else None,
         "last_monthly_reset": last_monthly_reset.isoformat() if last_monthly_reset else None
@@ -249,76 +252,56 @@ async def rank(ctx, member: discord.Member = None):
 
     next_role_level, next_role_id = get_next_role(level)
     next_role_name = "Nessun ruolo successivo"
-    if next_role_id:
-        next_role = ctx.guild.get_role(next_role_id)
-        if next_role:
-            next_role_name = f"{next_role.name} (Lv {next_role_level})"
+    if next_role_level is not None:
+        next_role_name = f"Ruolo livello {next_role_level}"
 
-    roles_names = get_user_roles(member)
-
-    embed = discord.Embed(title=f"📊 Rank di {member.display_name}", color=XP_COLOR)
+    embed = discord.Embed(title=f"Classifica di {member.display_name}", color=XP_COLOR)
     embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-    embed.add_field(name="Livello", value=str(level), inline=True)
-    embed.add_field(name="XP Totali", value=str(xp), inline=True)
-    embed.add_field(name="XP per prossimo livello", value=str(xp_needed), inline=True)
-    embed.add_field(name="Prossimo ruolo", value=next_role_name, inline=False)
-    embed.add_field(name="Ruoli attuali", value=", ".join(roles_names), inline=False)
-    embed.add_field(name="Posizione Globale", value=str(global_pos), inline=True)
-    embed.add_field(name="Posizione Giornaliera", value=str(daily_pos), inline=True)
-    embed.add_field(name="Posizione Settimanale", value=str(weekly_pos), inline=True)
-    embed.add_field(name="Posizione Mensile", value=str(monthly_pos), inline=True)
+    embed.add_field(name="Livello", value=str(level))
+    embed.add_field(name="XP totale", value=str(xp))
+    embed.add_field(name="XP per prossimo livello", value=str(xp_needed))
+    embed.add_field(name="Posizione Giornaliera", value=str(daily_pos))
+    embed.add_field(name="Posizione Settimanale", value=str(weekly_pos))
+    embed.add_field(name="Posizione Mensile", value=str(monthly_pos))
+    embed.add_field(name="Posizione Globale", value=str(global_pos))
+    embed.add_field(name="Prossimo ruolo", value=next_role_name)
 
-    await ctx.send(embed=embed)
-
-@bot.command(name="top")
-async def top_command(ctx):
-    embed = create_leaderboard_embed("🏆 Classifica Globale Top 10", user_total_xp)
     await ctx.send(embed=embed)
 
 @bot.command()
-async def social(ctx):
-    embed = discord.Embed(title="Social di Tw3nty Mars", color=XP_COLOR)
-    for name, url in SOCIAL_LINKS.items():
-        embed.add_field(name=name.capitalize(), value=f"[Link]({url})", inline=True)
+async def leaderboard(ctx, timeframe: str = "global"):
+    timeframe = timeframe.lower()
+    if timeframe == "daily":
+        embed = create_leaderboard_embed("Classifica Giornaliera", xp_daily)
+    elif timeframe == "weekly":
+        embed = create_leaderboard_embed("Classifica Settimanale", xp_weekly)
+    elif timeframe == "monthly":
+        embed = create_leaderboard_embed("Classifica Mensile", xp_monthly)
+    else:
+        embed = create_leaderboard_embed("Classifica Globale", user_total_xp)
+
     await ctx.send(embed=embed)
 
-@tasks.loop(minutes=10)
+@tasks.loop(minutes=1)
 async def reset_checks():
-    global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
 
-    # Reset Giornaliero alle 00:00
-    if last_daily_reset.date() < now.date():
+    global last_daily_reset, last_weekly_reset, last_monthly_reset
+
+    # Reset giornaliero a mezzanotte
+    if last_daily_reset is None or now.date() > last_daily_reset.date():
         reset_daily()
         save_data()
-        channel = bot.get_channel(CHANNEL_DAILY)
-        if channel:
-            embed = discord.Embed(title="⏰ Reset Giornaliero",
-                                  description="La classifica giornaliera è stata resettata!",
-                                  color=XP_COLOR)
-            await channel.send(embed=embed)
 
-    # Reset Settimanale Lunedì 00:00
-    if now.isoweekday() == 1 and (last_weekly_reset.date() < now.date()):
+    # Reset settimanale ogni lunedì
+    if last_weekly_reset is None or now.isocalendar()[1] > last_weekly_reset.isocalendar()[1]:
         reset_weekly()
         save_data()
-        channel = bot.get_channel(CHANNEL_WEEKLY)
-        if channel:
-            embed = discord.Embed(title="⏰ Reset Settimanale",
-                                  description="La classifica settimanale è stata resettata!",
-                                  color=XP_COLOR)
-            await channel.send(embed=embed)
 
-    # Reset Mensile il primo giorno del mese 00:00
-    if now.day == 1 and (last_monthly_reset.month < now.month or last_monthly_reset.year < now.year):
+    # Reset mensile il primo giorno del mese
+    if last_monthly_reset is None or now.month != last_monthly_reset.month:
         reset_monthly()
         save_data()
-        channel = bot.get_channel(CHANNEL_MONTHLY)
-        if channel:
-            embed = discord.Embed(title="⏰ Reset Mensile",
-                                  description="La classifica mensile è stata resettata!",
-                                  color=XP_COLOR)
-            await channel.send(embed=embed)
 
 keep_alive()
 bot.run(TOKEN)
