@@ -18,55 +18,6 @@ async def on_ready():
 import aiohttp
 from io import BytesIO
 
-@bot.event
-async def on_message(message):
-    if message.author.id == bot.user.id:
-        return
-
-    if message.author.id == PRO_BOT_ID:
-        try:
-            # DEBUG
-            print("📨 Messaggio ricevuto da Pro Bot")
-            print("Contenuto:", message.content)
-            print("Embed:", message.embeds)
-            print("Allegati:", message.attachments)
-
-            if message.content.startswith("/rank") or message.content.startswith("/top") or message.embeds or message.attachments:
-                await message.delete()
-
-                target_channel = bot.get_channel(TARGET_CHANNEL_ID)
-                if target_channel is None:
-                    target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
-
-                # Crea nuovo messaggio
-                forward_content = f"Messaggio spostato dal canale #{message.channel.name}:"
-                if message.content:
-                    forward_content += f"\n{message.content}"
-
-                files = [await att.to_file() for att in message.attachments]
-                embeds = []
-
-                # Se il messaggio ha embed con immagini
-                for embed in message.embeds:
-                    if embed.image and embed.image.url:
-                        try:
-                            async with aiohttp.ClientSession() as session:
-                                async with session.get(embed.image.url) as resp:
-                                    if resp.status == 200:
-                                        img_data = BytesIO(await resp.read())
-                                        filename = embed.image.url.split("/")[-1].split("?")[0]
-                                        files.append(discord.File(img_data, filename=filename))
-                        except Exception as e:
-                            print(f"⚠️ Errore nel recuperare immagine embed: {e}")
-
-                    embeds.append(embed)
-
-                await target_channel.send(content=forward_content, embeds=embeds if embeds else None, files=files if files else None)
-
-        except Exception as e:
-            print(f"❌ Errore nello spostare messaggio Pro Bot: {e}")
-
-    await bot.process_commands(message)
 
 
 # --- COMANDI DEL BOT ---
