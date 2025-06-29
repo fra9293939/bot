@@ -34,4 +34,88 @@ async def youtube(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name="tiktok")
-async d
+async def tiktok(ctx):
+    embed = discord.Embed(
+        title="📱 TikTok di Tw3nty Mars",
+        description=(
+            "Profilo per le live: [tw3ntymars](https://www.tiktok.com/@tw3ntymars)\n"
+            "Profilo personale: [martinaastasi](https://www.tiktok.com/@martinaastasi)"
+        ),
+        color=0xB500FF
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="instagram", aliases=["ig"])
+async def instagram(ctx):
+    embed = discord.Embed(
+        title="📸 Instagram di Tw3nty Mars",
+        description="[Visita il profilo Instagram](https://www.instagram.com/tw3nty_mars)",
+        color=0xB500FF
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="discord", aliases=["ds"])
+async def discord_cmd(ctx):
+    embed = discord.Embed(
+        title="💬 Server Discord",
+        description="[Unisciti qui!](https://discord.gg/xKqWsTYRqy)",
+        color=0xB500FF
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="orari")
+async def orari(ctx):
+    embed = discord.Embed(
+        title="📅 Streaming Schedule",
+        description="TUTTI I GIORNI DALLE 18:00 ALLE 21:00🕑 (salvo imprevisti, vi avvisiamo su ig e ds)",
+        color=0xB500FF
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="comandi")
+async def comandi(ctx):
+    embed = discord.Embed(
+        title="📜 Lista comandi",
+        description=(
+            "!twitch - Link Twitch\n"
+            "!youtube / !yt - Link YouTube\n"
+            "!tiktok - Link TikTok\n"
+            "!instagram / !ig - Link Instagram\n"
+            "!discord / !ds - Link Discord\n"
+            "!orari - Orario streaming\n"
+            "!comandi - Questa lista"
+        ),
+        color=0xB500FF
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="send")
+async def send(ctx, *, message=None):
+    if not ctx.author.guild_permissions.manage_messages:
+        await ctx.send("❌ Non hai i permessi per usare questo comando.")
+        return
+
+    files = []
+    if ctx.message.attachments:
+        try:
+            files = [await attachment.to_file() for attachment in ctx.message.attachments]
+        except Exception as e:
+            await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
+            return
+
+    try:
+        await ctx.message.delete()
+    except discord.NotFound:
+        pass
+    except discord.Forbidden:
+        await ctx.send("❌ Non ho i permessi per eliminare il messaggio.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Errore durante l'eliminazione del messaggio: {e}")
+
+    if message or files:
+        await ctx.send(content=message, files=files)
+    else:
+        await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+
+keep_alive()
+bot.run(TOKEN)
