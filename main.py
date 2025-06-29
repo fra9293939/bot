@@ -21,26 +21,42 @@ async def on_message(message):
         return
 
     if message.author.id == PRO_BOT_ID:
-        # Se il messaggio ha embed (Pro Bot manda embed per /rank e /top)
-        if message.embeds:
+        content = message.content.lower()
+
+        if content.startswith("/rank") or content.startswith("/top") or True:  # Forziamo su tutti i messaggi di Pro Bot se vuoi
             try:
                 target_channel = bot.get_channel(TARGET_CHANNEL_ID)
                 if target_channel is None:
                     target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
 
-                # Cancella messaggio originale
+                # Copia eventuali embed o file
+                embeds = message.embeds
+                files = []
+                if message.attachments:
+                    for attachment in message.attachments:
+                        fp = await attachment.to_file()
+                        files.append(fp)
+
+                # Cancella il messaggio originale
                 await message.delete()
 
-                # Invia una nota + embed nel canale di destinazione
+                # Invio nota con canale origine
                 await target_channel.send(f"Messaggio spostato dal canale #{message.channel.name}:")
 
-                for embed in message.embeds:
-                    await target_channel.send(embed=embed)
+                # Reinvia embed o file o testo
+                if embeds:
+                    for embed in embeds:
+                        await target_channel.send(embed=embed)
+                elif files:
+                    await target_channel.send(files=files)
+                else:
+                    await target_channel.send(message.content)
 
             except Exception as e:
-                print(f"Errore nello spostare messaggio embed Pro Bot: {e}")
+                print(f"Errore nello spostare messaggio Pro Bot: {e}")
 
     await bot.process_commands(message)
+
 
 # --- COMANDI DEL BOT ---
 @bot.command(name="twitch")
