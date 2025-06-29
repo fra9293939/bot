@@ -17,46 +17,29 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    # Ignora i messaggi dal bot stesso
     if message.author.id == bot.user.id:
         return
 
-    # Debug: stampa messaggi di Pro Bot per capire struttura
     if message.author.id == PRO_BOT_ID:
-        print(f"Messaggio Pro Bot ricevuto. Content: '{message.content}' - Embeds: {len(message.embeds)}")
-
-        content_lower = message.content.lower() if message.content else ""
-
-        # Caso testo semplice
-        if content_lower.startswith("/rank") or content_lower.startswith("/top"):
+        # Se il messaggio ha embed (Pro Bot manda embed per /rank e /top)
+        if message.embeds:
             try:
-                await message.delete()
-                target_channel = bot.get_channel(TARGET_CHANNEL_ID) or await bot.fetch_channel(TARGET_CHANNEL_ID)
-                forward_content = f"Messaggio spostato dal canale #{message.channel.name}:\n{message.content}"
-                await target_channel.send(forward_content)
-            except Exception as e:
-                print(f"Errore nello spostare messaggio Pro Bot (testo): {e}")
-        
-        # Caso embed (ad esempio comandi slash che rispondono con embed)
-        else:
-            for embed in message.embeds:
-                title = embed.title.lower() if embed.title else ""
-                description = embed.description.lower() if embed.description else ""
-                if ("rank" in title or "top" in title) or ("rank" in description or "top" in description):
-                    try:
-                        await message.delete()
-                        target_channel = bot.get_channel(TARGET_CHANNEL_ID) or await bot.fetch_channel(TARGET_CHANNEL_ID)
-                        forward_content = (
-                            f"Messaggio spostato dal canale #{message.channel.name}:\n"
-                            f"Embed Title: {embed.title}\n"
-                            f"Embed Description: {embed.description}"
-                        )
-                        await target_channel.send(forward_content)
-                    except Exception as e:
-                        print(f"Errore nello spostare messaggio Pro Bot (embed): {e}")
-                    break
+                target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+                if target_channel is None:
+                    target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
 
-    # Permetti ai comandi di funzionare normalmente
+                # Cancella messaggio originale
+                await message.delete()
+
+                # Invia una nota + embed nel canale di destinazione
+                await target_channel.send(f"Messaggio spostato dal canale #{message.channel.name}:")
+
+                for embed in message.embeds:
+                    await target_channel.send(embed=embed)
+
+            except Exception as e:
+                print(f"Errore nello spostare messaggio embed Pro Bot: {e}")
+
     await bot.process_commands(message)
 
 # --- COMANDI DEL BOT ---
