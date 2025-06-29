@@ -15,6 +15,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
 
+import aiohttp
+from io import BytesIO
+
 @bot.event
 async def on_message(message):
     if message.author.id == bot.user.id:
@@ -37,9 +40,26 @@ async def on_message(message):
 
                 # Crea nuovo messaggio
                 forward_content = f"Messaggio spostato dal canale #{message.channel.name}:"
+                if message.content:
+                    forward_content += f"\n{message.content}"
 
                 files = [await att.to_file() for att in message.attachments]
-                embeds = message.embeds
+                embeds = []
+
+                # Se il messaggio ha embed con immagini
+                for embed in message.embeds:
+                    if embed.image and embed.image.url:
+                        try:
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(embed.image.url) as resp:
+                                    if resp.status == 200:
+                                        img_data = BytesIO(await resp.read())
+                                        filename = embed.image.url.split("/")[-1].split("?")[0]
+                                        files.append(discord.File(img_data, filename=filename))
+                        except Exception as e:
+                            print(f"⚠️ Errore nel recuperare immagine embed: {e}")
+
+                    embeds.append(embed)
 
                 await target_channel.send(content=forward_content, embeds=embeds if embeds else None, files=files if files else None)
 
