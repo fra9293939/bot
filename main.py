@@ -7,8 +7,14 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import defaultdict
 from keep_alive import keep_alive
+from pymongo import MongoClient
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+MONGODB_URI = os.getenv("MONGODB_URI")
+
+mongo_client = MongoClient(MONGODB_URI)
+db = mongo_client["discord_bot_db"]
+xp_collection = db["xp_collection"]
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -38,10 +44,6 @@ CHANNEL_DAILY = 1388623669886189628
 CHANNEL_WEEKLY = 1388623669886189628
 CHANNEL_MONTHLY = 1388623669886189628
 CHANNEL_LEVELUP = 1383429600016728074
-
-DATA_FILE = "xp_data.json"
-MSG_ID_FILE = "leaderboard_msg_ids.json"
-COOLDOWN_FILE = "cooldowns.json"
 
 SOCIAL_LINKS = {
     "discord": "https://discord.gg/7xSGy3VQr3",
@@ -97,6 +99,7 @@ def add_xp(user_id, amount):
     xp_weekly[user_id] += amount
     xp_monthly[user_id] += amount
     user_total_xp[user_id] += amount
+
 async def check_level_up(user_id, member, level):
     channel = bot.get_channel(CHANNEL_LEVELUP)
     if channel:
@@ -107,7 +110,6 @@ async def check_level_up(user_id, member, level):
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         await channel.send(embed=embed)
 
-    # Ruolo sbloccato
     for lvl, role_id in sorted(ROLE_LEVELS.items(), reverse=True):
         if level >= lvl:
             role = member.guild.get_role(role_id)
@@ -122,8 +124,11 @@ async def check_level_up(user_id, member, level):
                     await channel.send(embed=embed)
             break
 
+# --- SAVE / LOAD DATA MongoDB ---
+
 def save_data():
     data = {
+        "_id": "xp_data",
         "xp_daily": dict(xp_daily),
         "xp_weekly": dict(xp_weekly),
         "xp_monthly": dict(xp_monthly),
@@ -132,27 +137,27 @@ def save_data():
         "last_weekly_reset": last_weekly_reset.isoformat() if last_weekly_reset else None,
         "last_monthly_reset": last_monthly_reset.isoformat() if last_monthly_reset else None
     }
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f)
+    xp_collection.replace_one({"_id": "xp_data"}, data, upsert=True)
 
 def load_data():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
-    if not os.path.exists(DATA_FILE):
+    data = xp_collection.find_one({"_id": "xp_data"})
+    if not data:
         now = datetime.now(TIMEZONE)
         last_daily_reset = now
         last_weekly_reset = now
         last_monthly_reset = now
         return
-    with open(DATA_FILE, 'r') as f:
-        data = json.load(f)
-    for k in data.get("xp_daily", {}):
-        xp_daily[int(k)] = data["xp_daily"][k]
-    for k in data.get("xp_weekly", {}):
-        xp_weekly[int(k)] = data["xp_weekly"][k]
-    for k in data.get("xp_monthly", {}):
-        xp_monthly[int(k)] = data["xp_monthly"][k]
-    for k in data.get("user_total_xp", {}):
-        user_total_xp[int(k)] = data["user_total_xp"][k]
+
+    for k, v in data.get("xp_daily", {}).items():
+        xp_daily[int(k)] = v
+    for k, v in data.get("xp_weekly", {}).items():
+        xp_weekly[int(k)] = v
+    for k, v in data.get("xp_monthly", {}).items():
+        xp_monthly[int(k)] = v
+    for k, v in data.get("user_total_xp", {}).items():
+        user_total_xp[int(k)] = v
+
     last_daily_reset = datetime.fromisoformat(data.get("last_daily_reset", datetime.now(TIMEZONE).isoformat()))
     last_weekly_reset = datetime.fromisoformat(data.get("last_weekly_reset", datetime.now(TIMEZONE).isoformat()))
     last_monthly_reset = datetime.fromisoformat(data.get("last_monthly_reset", datetime.now(TIMEZONE).isoformat()))
@@ -211,19 +216,16 @@ async def on_message(message):
     user_id = message.author.id
 
     if can_get_xp(user_id):
-        old_level = xp_to_level(user_total_xp[user_id])  # livello prima del guadagno
+        old_level = xp_to_level(user_total_xp[user_id])
         gained = random.randint(10, 20)
         add_xp(user_id, gained)
         save_data()
-        new_level = xp_to_level(user_total_xp[user_id])  # livello dopo
+        new_level = xp_to_level(user_total_xp[user_id])
 
         if new_level > old_level:
             await check_level_up(user_id, message.author, new_level)
 
     await bot.process_commands(message)
-
-
-# Comando !rank
 
 @bot.command()
 async def rank(ctx, member: discord.Member = None):
@@ -263,8 +265,6 @@ async def rank(ctx, member: discord.Member = None):
 
     await ctx.send(embed=embed)
 
-# Comandi top/day/week/month
-
 @bot.command(name="top")
 async def top_command(ctx):
     embed = create_leaderboard_embed("🏆 Classifica Globale Top 10", user_total_xp)
@@ -285,156 +285,59 @@ async def month(ctx):
     embed = create_leaderboard_embed("📅 Classifica Mensile Top 10", xp_monthly)
     await ctx.send(embed=embed)
 
-# Comando comandi (senza addxp e resetxp)
-
 @bot.command()
 async def comandi(ctx):
     cmds = [
-        "!rank [@utente] — Mostra il rank dettagliato di un utente",
+        "!rank [@utente] — Mostra il rank dell'utente",
         "!top — Classifica globale",
         "!day — Classifica giornaliera",
         "!week — Classifica settimanale",
         "!month — Classifica mensile",
-        "!orari — Mostra gli orari del bot e link social:\n"
-        "• Discord: /ds — https://discord.gg/7xSGy3VQr3\n"
-        "• YouTube: /yt — https://www.youtube.com/@tw3ntymars\n"
-        "• Instagram: /ig — https://www.instagram.com/tw3nty.mars/\n"
-        "• Twitch: /twitch — https://www.twitch.tv/tw3ntymars\n"
-        "• TikTok: /tiktok — https://www.tiktok.com/@tw3nty.mars"
+        "!social — Link social",
+        "!comandi — Lista comandi"
     ]
-
-    txt = "**Comandi disponibili:**\n" + "\n".join(cmds)
-
-    embed = discord.Embed(
-        title="Lista Comandi",
-        description=txt,
-        color=0xB500FF  # viola
-    )
+    embed = discord.Embed(title="📚 Comandi disponibili", description="\n".join(cmds), color=XP_COLOR)
     await ctx.send(embed=embed)
 
-
-
-# Comando orari (link social)
-
 @bot.command()
-async def orari(ctx):
-    txt = "**Link Social:**\n"
-    for k,v in SOCIAL_LINKS.items():
-        txt += f"{k.capitalize()}: {v}\n"
-    await ctx.send(txt)
+async def social(ctx):
+    description = "\n".join(f"[{key.capitalize()}]({url})" for key, url in SOCIAL_LINKS.items())
+    embed = discord.Embed(title="🔗 Social", description=description, color=XP_COLOR)
+    await ctx.send(embed=embed)
 
-# Comandi admin (addxp e resetxp) nascosti da !comandi
-
-def is_admin():
-    async def predicate(ctx):
-        return ctx.author.guild_permissions.administrator
-    return commands.check(predicate)
-
-@bot.command(name="addxp")
-@is_admin()
-async def addxp(ctx, member: discord.Member, amount: int):
-    add_xp(member.id, amount)
-    save_data()
-    await ctx.send(f"Aggiunti {amount} XP a {member.display_name}")
-
-@bot.command(name="resetxp")
-@is_admin()
-async def resetxp(ctx, member: discord.Member = None):
-    if member:
-        user_total_xp[member.id] = 0
-        xp_daily[member.id] = 0
-        xp_weekly[member.id] = 0
-        xp_monthly[member.id] = 0
-        await ctx.send(f"XP resettati per {member.display_name}")
-    else:
-        user_total_xp.clear()
-        xp_daily.clear()
-        xp_weekly.clear()
-        xp_monthly.clear()
-        await ctx.send("XP resettati per tutti")
-    save_data()
-@bot.command()
-@is_admin()
-async def setlevel(ctx, member: discord.Member, level: int):
-    if level < 0:
-        await ctx.send("Il livello deve essere 0 o superiore.")
-        return
-    xp = 50 * (level ** 3)
-    user_total_xp[member.id] = xp
-    xp_daily[member.id] = 0
-    xp_weekly[member.id] = 0
-    xp_monthly[member.id] = 0
-    save_data()
-    await ctx.send(f"L'XP di {member.display_name} è stata impostata per livello {level} ({xp} XP).")
-
-# --- LEADERBOARD AUTOMATIC UPDATE ---
-
-@tasks.loop(minutes=5)
-async def leaderboard_update():
-    try:
-        guild = bot.guilds[0]  # assumo un solo server, o cambia con ID specifico
-        channels = {
-            "daily": bot.get_channel(CHANNEL_DAILY),
-            "weekly": bot.get_channel(CHANNEL_WEEKLY),
-            "monthly": bot.get_channel(CHANNEL_MONTHLY),
-            "top": bot.get_channel(CHANNEL_DAILY),  # puoi cambiare canale per top globale se vuoi
-        }
-        for key, channel in channels.items():
-            if channel is None:
-                continue
-            embed = None
-            if key == "daily":
-                embed = create_leaderboard_embed("📅 Classifica Giornaliera Top 10", xp_daily)
-            elif key == "weekly":
-                embed = create_leaderboard_embed("📅 Classifica Settimanale Top 10", xp_weekly)
-            elif key == "monthly":
-                embed = create_leaderboard_embed("📅 Classifica Mensile Top 10", xp_monthly)
-            elif key == "top":
-                embed = create_leaderboard_embed("🏆 Classifica Globale Top 10", user_total_xp)
-
-            # invio o aggiorno messaggio
-            msg_id = leaderboard_messages.get(key)
-            if msg_id:
-                try:
-                    msg = await channel.fetch_message(msg_id)
-                    await msg.edit(embed=embed)
-                except:
-                    sent = await channel.send(embed=embed)
-                    leaderboard_messages[key] = sent.id
-            else:
-                sent = await channel.send(embed=embed)
-                leaderboard_messages[key] = sent.id
-    except Exception as e:
-        print(f"Errore leaderboard update: {e}")
-
-# --- RESET SCHEDULE (esempio semplice, va migliorato) ---
-
-@tasks.loop(minutes=60)
-async def reset_check():
+# --- BACKGROUND TASKS ---
+@tasks.loop(minutes=1)
+async def reset_checks():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
 
-    # reset giornaliero a mezzanotte
-    if last_daily_reset.date() < now.date():
+    if last_daily_reset is None or (now - last_daily_reset) >= timedelta(days=1):
         reset_daily()
         save_data()
+        channel = bot.get_channel(CHANNEL_DAILY)
+        if channel:
+            await channel.send("🔄 Classifica giornaliera resettata.")
 
-    # reset settimanale lunedì
-    if last_weekly_reset.isocalendar()[1] < now.isocalendar()[1]:
+    if last_weekly_reset is None or (now - last_weekly_reset) >= timedelta(weeks=1):
         reset_weekly()
         save_data()
+        channel = bot.get_channel(CHANNEL_WEEKLY)
+        if channel:
+            await channel.send("🔄 Classifica settimanale resettata.")
 
-    # reset mensile primo giorno mese
-    if last_monthly_reset.month < now.month:
+    if last_monthly_reset is None or (now - last_monthly_reset) >= timedelta(days=30):
         reset_monthly()
         save_data()
+        channel = bot.get_channel(CHANNEL_MONTHLY)
+        if channel:
+            await channel.send("🔄 Classifica mensile resettata.")
 
 @bot.event
 async def on_ready():
-    print(f"Bot pronto come {bot.user}")
+    print(f"{bot.user} è online!")
     load_data()
-    leaderboard_update.start()
-    reset_check.start()
+    reset_checks.start()
 
 keep_alive()
 bot.run(TOKEN)
+
