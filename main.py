@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands, tasks
 import os
-import json
 import random
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -65,28 +64,27 @@ last_daily_reset = None
 last_weekly_reset = None
 last_monthly_reset = None
 
-leaderboard_messages = {"daily": None, "weekly": None, "monthly": None, "top": None}
-
 # --- XP LOGIC ---
-def xp_to_level(xp):
+
+def xp_to_level(xp: int) -> int:
     return int((xp / 50) ** (1/3))
 
-def xp_for_next_level(level):
+def xp_for_next_level(level: int) -> int:
     return 50 * (level + 1) ** 3
 
-def xp_to_next_level(xp):
+def xp_to_next_level(xp: int) -> int:
     level = xp_to_level(xp)
     next_xp = xp_for_next_level(level)
     return next_xp - xp
 
-def get_next_role(level):
+def get_next_role(level: int):
     sorted_levels = sorted(ROLE_LEVELS.keys())
     for l in sorted_levels:
         if l > level:
             return l, ROLE_LEVELS[l]
     return None, None
 
-def can_get_xp(user_id):
+def can_get_xp(user_id: int) -> bool:
     now = datetime.now(TIMEZONE)
     last = user_cooldowns.get(user_id)
     if not last or now - last >= COOLDOWN:
@@ -94,39 +92,41 @@ def can_get_xp(user_id):
         return True
     return False
 
-def add_xp(user_id, amount):
+def add_xp(user_id: int, amount: int):
     xp_daily[user_id] += amount
     xp_weekly[user_id] += amount
     xp_monthly[user_id] += amount
     user_total_xp[user_id] += amount
 
-async def check_level_up(user_id, member, level):
+async def check_level_up(user_id: int, member: discord.Member, new_level: int):
     channel = bot.get_channel(CHANNEL_LEVELUP)
     if channel:
         embed = discord.Embed(
-            description=f"🎉 {member.mention} è salito al livello **{level}**!",
+            description=f"🎉 {member.mention} è salito al livello **{new_level}**!",
             color=XP_COLOR
         )
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         await channel.send(embed=embed)
 
-    for lvl, role_id in sorted(ROLE_LEVELS.items(), reverse=True):
-        if level >= lvl:
-            role = member.guild.get_role(role_id)
-            if role and role not in member.roles:
-                await member.add_roles(role)
-                if channel:
-                    embed = discord.Embed(
-                        description=f"🔓 {member.mention} ha sbloccato il ruolo per il **livello {lvl}**!",
-                        color=XP_COLOR
-                    )
-                    embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-                    await channel.send(embed=embed)
-            break
+    # Gestione ruoli, assegna solo il ruolo più alto raggiunto e non duplicati
+    highest_role_level = max([lvl for lvl in ROLE_LEVELS.keys() if lvl <= new_level], default=None)
+    if highest_role_level is not None:
+        role_id = ROLE_LEVELS[highest_role_level]
+        role = member.guild.get_role(role_id)
+        if role and role not in member.roles:
+            await member.add_roles(role)
+            if channel:
+                embed = discord.Embed(
+                    description=f"🔓 {member.mention} ha sbloccato il ruolo per il **livello {highest_role_level}**!",
+                    color=XP_COLOR
+                )
+                embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+                await channel.send(embed=embed)
 
-# --- SAVE / LOAD DATA MongoDB ---
+# --- DATABASE SAVE / LOAD ---
 
 def save_data():
+    global last_daily_reset, last_weekly_reset, last_monthly_reset
     data = {
         "_id": "xp_data",
         "xp_daily": dict(xp_daily),
@@ -181,20 +181,20 @@ def reset_monthly():
 
 # --- UTILS ---
 
-def get_position(user_id, ranking_dict):
+def get_position(user_id: int, ranking_dict: dict) -> int | None:
     sorted_list = sorted(ranking_dict.items(), key=lambda x: x[1], reverse=True)
     for i, (uid, _) in enumerate(sorted_list, 1):
         if uid == user_id:
             return i
     return None
 
-def get_user_roles(member):
+def get_user_roles(member: discord.Member):
     roles = [role.name for role in member.roles if role.id in ROLE_LEVELS.values()]
     return roles if roles else ["Nessun ruolo"]
 
-# --- LEADERBOARD EMBEDS ---
+# --- EMBED CREATION ---
 
-def create_leaderboard_embed(title, ranking_dict):
+def create_leaderboard_embed(title: str, ranking_dict: dict):
     embed = discord.Embed(title=title, color=XP_COLOR)
     sorted_list = sorted(ranking_dict.items(), key=lambda x: x[1], reverse=True)[:10]
     if not sorted_list:
@@ -207,7 +207,14 @@ def create_leaderboard_embed(title, ranking_dict):
     embed.set_footer(text=f"Aggiornato: {datetime.now(TIMEZONE).strftime('%d/%m/%Y %H:%M:%S')}")
     return embed
 
-# --- COMMANDS ---
+# --- EVENTS & COMMANDS ---
+
+@bot.event
+async def on_ready():
+    print(f"{bot.user} è online!")
+    load_data()
+    reset_checks.start()
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -241,13 +248,11 @@ async def rank(ctx, member: discord.Member = None):
     global_pos = get_position(member.id, user_total_xp) or "N/A"
 
     next_role_level, next_role_id = get_next_role(level)
-    next_role_name = None
+    next_role_name = "Nessun ruolo successivo"
     if next_role_id:
         next_role = ctx.guild.get_role(next_role_id)
         if next_role:
             next_role_name = f"{next_role.name} (Lv {next_role_level})"
-    else:
-        next_role_name = "Nessun ruolo successivo"
 
     roles_names = get_user_roles(member)
 
@@ -258,7 +263,7 @@ async def rank(ctx, member: discord.Member = None):
     embed.add_field(name="XP per prossimo livello", value=str(xp_needed), inline=True)
     embed.add_field(name="Prossimo ruolo", value=next_role_name, inline=False)
     embed.add_field(name="Ruoli attuali", value=", ".join(roles_names), inline=False)
-    embed.add_field(name="Posizione Global", value=str(global_pos), inline=True)
+    embed.add_field(name="Posizione Globale", value=str(global_pos), inline=True)
     embed.add_field(name="Posizione Giornaliera", value=str(daily_pos), inline=True)
     embed.add_field(name="Posizione Settimanale", value=str(weekly_pos), inline=True)
     embed.add_field(name="Posizione Mensile", value=str(monthly_pos), inline=True)
@@ -271,73 +276,49 @@ async def top_command(ctx):
     await ctx.send(embed=embed)
 
 @bot.command()
-async def day(ctx):
-    embed = create_leaderboard_embed("📅 Classifica Giornaliera Top 10", xp_daily)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def week(ctx):
-    embed = create_leaderboard_embed("📅 Classifica Settimanale Top 10", xp_weekly)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def month(ctx):
-    embed = create_leaderboard_embed("📅 Classifica Mensile Top 10", xp_monthly)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def comandi(ctx):
-    cmds = [
-        "!rank [@utente] — Mostra il rank dell'utente",
-        "!top — Classifica globale",
-        "!day — Classifica giornaliera",
-        "!week — Classifica settimanale",
-        "!month — Classifica mensile",
-        "!social — Link social",
-        "!comandi — Lista comandi"
-    ]
-    embed = discord.Embed(title="📚 Comandi disponibili", description="\n".join(cmds), color=XP_COLOR)
-    await ctx.send(embed=embed)
-
-@bot.command()
 async def social(ctx):
-    description = "\n".join(f"[{key.capitalize()}]({url})" for key, url in SOCIAL_LINKS.items())
-    embed = discord.Embed(title="🔗 Social", description=description, color=XP_COLOR)
+    embed = discord.Embed(title="Social di Tw3nty Mars", color=XP_COLOR)
+    for name, url in SOCIAL_LINKS.items():
+        embed.add_field(name=name.capitalize(), value=f"[Link]({url})", inline=True)
     await ctx.send(embed=embed)
 
-# --- BACKGROUND TASKS ---
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=10)
 async def reset_checks():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
 
-    if last_daily_reset is None or (now - last_daily_reset) >= timedelta(days=1):
+    # Reset Giornaliero alle 00:00
+    if last_daily_reset.date() < now.date():
         reset_daily()
         save_data()
         channel = bot.get_channel(CHANNEL_DAILY)
         if channel:
-            await channel.send("🔄 Classifica giornaliera resettata.")
+            embed = discord.Embed(title="⏰ Reset Giornaliero",
+                                  description="La classifica giornaliera è stata resettata!",
+                                  color=XP_COLOR)
+            await channel.send(embed=embed)
 
-    if last_weekly_reset is None or (now - last_weekly_reset) >= timedelta(weeks=1):
+    # Reset Settimanale Lunedì 00:00
+    if now.isoweekday() == 1 and (last_weekly_reset.date() < now.date()):
         reset_weekly()
         save_data()
         channel = bot.get_channel(CHANNEL_WEEKLY)
         if channel:
-            await channel.send("🔄 Classifica settimanale resettata.")
+            embed = discord.Embed(title="⏰ Reset Settimanale",
+                                  description="La classifica settimanale è stata resettata!",
+                                  color=XP_COLOR)
+            await channel.send(embed=embed)
 
-    if last_monthly_reset is None or (now - last_monthly_reset) >= timedelta(days=30):
+    # Reset Mensile il primo giorno del mese 00:00
+    if now.day == 1 and (last_monthly_reset.month < now.month or last_monthly_reset.year < now.year):
         reset_monthly()
         save_data()
         channel = bot.get_channel(CHANNEL_MONTHLY)
         if channel:
-            await channel.send("🔄 Classifica mensile resettata.")
-
-@bot.event
-async def on_ready():
-    print(f"{bot.user} è online!")
-    load_data()
-    reset_checks.start()
+            embed = discord.Embed(title="⏰ Reset Mensile",
+                                  description="La classifica mensile è stata resettata!",
+                                  color=XP_COLOR)
+            await channel.send(embed=embed)
 
 keep_alive()
 bot.run(TOKEN)
-
