@@ -1,18 +1,15 @@
 import discord
 from discord.ext import commands
 import os
+from keep_alive import keep_alive
+
+import io
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f"✅ Bot attivo come {bot.user}")
-    await bot.wait_until_ready()
 
 @bot.command(name="twitch")
 async def twitch(ctx):
@@ -68,7 +65,7 @@ async def discord_cmd(ctx):
 async def orari(ctx):
     embed = discord.Embed(
         title="📅 Streaming Schedule",
-        description="TUTTI I GIORNI DALLE 18:00 ALLE 21:00🕑 (salvo imprevisti, vi avvisiamo su ig e ds)",
+        description="TUTTI I GIORNI DALLE 20:30 ALLE 23:30! 🕑\n(salvo imprevisti, vi avvisiamo su IG e Discord)",
         color=0xB500FF
     )
     await ctx.send(embed=embed)
@@ -93,29 +90,23 @@ async def comandi(ctx):
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
-        await ctx.send("❌ Non hai i permessi per usare questo comando.")
         return
+
+    await ctx.message.delete()
 
     files = []
     if ctx.message.attachments:
-        try:
-            files = [await attachment.to_file() for attachment in ctx.message.attachments]
-        except Exception as e:
-            await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
-            return
-
-    try:
-        await ctx.message.delete()
-    except discord.NotFound:
-        pass
-    except discord.Forbidden:
-        await ctx.send("❌ Non ho i permessi per eliminare il messaggio.")
-    except Exception as e:
-        await ctx.send(f"⚠️ Errore durante l'eliminazione del messaggio: {e}")
+        files = [await attachment.to_file() for attachment in ctx.message.attachments]
 
     if message or files:
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
+@bot.event
+async def on_ready():
+    print(f"✅ Bot attivo come {bot.user}")
+    await bot.wait_until_ready()
+
+keep_alive()
 bot.run(TOKEN)
