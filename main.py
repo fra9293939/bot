@@ -3,8 +3,6 @@ from discord.ext import commands
 import os
 from keep_alive import keep_alive
 
-import io
-
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
@@ -86,6 +84,7 @@ async def comandi(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
+
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
@@ -118,7 +117,11 @@ async def send(ctx, *, message=None):
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
-    await bot.wait_until_ready()
 
 keep_alive()
+
+if not TOKEN:
+    print("❌ Token non trovato! Imposta la variabile d'ambiente DISCORD_BOT_TOKEN.")
+    exit(1)
+
 bot.run(TOKEN)
