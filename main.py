@@ -89,7 +89,7 @@ def add_xp(user_id, amount):
 
 # --- Salva / Carica ---
 def save_data():
-    if not xp_collection:
+    if xp_collection is None:
         return
     data = {
         "_id": "xp_data",
@@ -105,7 +105,7 @@ def save_data():
 
 def load_data():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
-    data = xp_collection.find_one({"_id": "xp_data"}) if xp_collection else None
+    data = xp_collection.find_one({"_id": "xp_data"}) if xp_collection is not None else None
     if not data:
         now = datetime.now(TIMEZONE)
         last_daily_reset = now
