@@ -1,19 +1,15 @@
 import discord
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
-from zoneinfo import ZoneInfo  # Python 3.9+
-import json
-import asyncio
+from zoneinfo import ZoneInfo
 
-from keep_alive import keep_alive  # Assumi che il tuo keep_alive funzioni
+from keep_alive import keep_alive  # Assicurati che funzioni correttamente
 
-print("Installing dependencies from requirements.txt")
-print("...")
-print("Running python main.py")
-
+# === CONFIGURAZIONE BOT ===
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
@@ -21,6 +17,7 @@ intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# === COSTANTI / ID ===
 CHANNEL_DAILY = 1388623669886189628
 CHANNEL_WEEKLY = 1388623669886189628
 CHANNEL_MONTHLY = 1388623669886189628
@@ -39,42 +36,17 @@ ROLE_LEVELS = {
 XP_COLOR = 0xB500FF
 TIMEZONE = ZoneInfo("Europe/Rome")
 
+# === VARIABILI XP ===
 xp_daily = defaultdict(int)
 xp_weekly = defaultdict(int)
 xp_monthly = defaultdict(int)
-
 last_daily_reset = datetime.now(TIMEZONE)
 last_weekly_reset = datetime.now(TIMEZONE)
 last_monthly_reset = datetime.now(TIMEZONE)
 
 scheduler = AsyncIOScheduler()
-XP_FILE = "xp_data.json"
 
-def save_xp():
-    with open(XP_FILE, "w") as f:
-        json.dump({
-            "daily": dict(xp_daily),
-            "weekly": dict(xp_weekly),
-            "monthly": dict(xp_monthly),
-        }, f)
-
-def load_xp():
-    if os.path.exists(XP_FILE):
-        try:
-            with open(XP_FILE, "r") as f:
-                data = json.load(f)
-                xp_daily.update({int(k): v for k, v in data.get("daily", {}).items()})
-                xp_weekly.update({int(k): v for k, v in data.get("weekly", {}).items()})
-                xp_monthly.update({int(k): v for k, v in data.get("monthly", {}).items()})
-                print("✅ XP caricati da file")
-        except Exception as e:
-            print(f"⚠️ Errore nel caricamento XP: {e}")
-
-async def periodic_save():
-    while True:
-        await asyncio.sleep(30)  # ogni 30 secondi
-        save_xp()
-
+# === FUNZIONI XP ===
 def check_resets():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
@@ -91,10 +63,10 @@ def check_resets():
         xp_monthly.clear()
         last_monthly_reset = now
 
-def add_xp(user_id):
-    xp_daily[user_id] += 10
-    xp_weekly[user_id] += 10
-    xp_monthly[user_id] += 10
+def add_xp(user_id, amount=10):
+    xp_daily[user_id] += amount
+    xp_weekly[user_id] += amount
+    xp_monthly[user_id] += amount
 
 async def update_roles(member, total_xp):
     guild = member.guild
@@ -134,22 +106,6 @@ def create_leaderboard_embed(title, xp_dict, guild):
         embed.add_field(name=f"#{i} - {name}", value=f"XP: {xp}", inline=False)
     return embed
 
-@bot.event
-async def on_message(message):
-    if message.author.bot or message.channel.type == discord.ChannelType.private:
-        return
-
-    now = datetime.now(TIMEZONE)
-    msg_time = message.created_at.replace(tzinfo=ZoneInfo("UTC")).astimezone(TIMEZONE)
-    if (now - msg_time).total_seconds() > 300:  # ignora messaggi più vecchi di 5 minuti
-        return
-
-    check_resets()
-    add_xp(message.author.id)
-    total_xp = xp_monthly[message.author.id]
-    await update_roles(message.author, total_xp)
-    await bot.process_commands(message)
-
 async def send_leaderboards():
     for guild in bot.guilds:
         ch_daily = guild.get_channel(CHANNEL_DAILY)
@@ -165,55 +121,98 @@ async def send_leaderboards():
         except Exception as e:
             print(f"Errore invio classifica in {guild.name}: {e}")
 
-# Comandi
+# === EVENTI ===
+@bot.event
+async def on_message(message):
+    if message.author.bot or message.channel.type == discord.ChannelType.private:
+        return
+    check_resets()
+    add_xp(message.author.id)
+    total_xp = xp_monthly[message.author.id]
+    await update_roles(message.author, total_xp)
+    await bot.process_commands(message)
 
+@bot.event
+async def on_ready():
+    print(f"✅ Bot attivo come {bot.user}")
+    scheduler.add_job(send_leaderboards, 'cron', day_of_week='mon', hour=8, minute=0, timezone=TIMEZONE)
+    scheduler.start()
+
+# === COMANDI XP ===
 @bot.command(name="testxp")
 async def test_xp(ctx):
     user_id = ctx.author.id
-    xp_daily[user_id] += 100
-    xp_weekly[user_id] += 100
-    xp_monthly[user_id] += 100
+    add_xp(user_id, 100)
     total_xp = xp_monthly[user_id]
     await update_roles(ctx.author, total_xp)
     await ctx.send(f"🎉 {ctx.author.display_name}, ti ho aggiunto 100 XP! Totale mensile: {total_xp}")
 
-@bot.command(name="classifica")
-async def classifica(ctx):
-    embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
-    await ctx.send(embed=embed)
+@bot.command(name="setxp")
+@commands.has_permissions(administrator=True)
+async def set_xp(ctx):
+    await ctx.send("Inserisci quanti XP vuoi aggiungere (numero intero positivo):")
 
-@bot.command(name="day")
-async def day(ctx):
-    embed = create_leaderboard_embed("🏆 Classifica Giornaliera XP", xp_daily, ctx.guild)
-    await ctx.send(embed=embed)
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
 
-@bot.command(name="week")
-async def week(ctx):
-    embed = create_leaderboard_embed("🏆 Classifica Settimanale XP", xp_weekly, ctx.guild)
-    await ctx.send(embed=embed)
+    try:
+        msg = await bot.wait_for('message', check=check, timeout=30)
+        xp_to_add = int(msg.content)
+        if xp_to_add <= 0:
+            await ctx.send("Per favore inserisci un numero positivo.")
+            return
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ Timeout: non hai risposto in tempo.")
+        return
 
-@bot.command(name="month")
-async def month(ctx):
-    embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
-    await ctx.send(embed=embed)
+    user_id = ctx.author.id
+    add_xp(user_id, xp_to_add)
+    total_xp = xp_monthly[user_id]
+    await update_roles(ctx.author, total_xp)
+    await ctx.send(f"🎉 {ctx.author.display_name}, ti ho aggiunto {xp_to_add} XP! Totale mensile: {total_xp}")
 
 @bot.command(name="rank")
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
     user_id = member.id
-
-    total_xp = xp_monthly.get(user_id, 0)
     guild = ctx.guild
 
-    # Calcola posizione in classifica mensile
-    sorted_xp = sorted(xp_monthly.items(), key=lambda x: x[1], reverse=True)
-    position = None
-    for i, (uid, xp) in enumerate(sorted_xp, start=1):
-        if uid == user_id:
-            position = i
+    def get_position(xp_dict):
+        sorted_xp = sorted(xp_dict.items(), key=lambda x: x[1], reverse=True)
+        for i, (uid, xp) in enumerate(sorted_xp, start=1):
+            if uid == user_id:
+                return i
+        return None
+
+    daily_xp = xp_daily.get(user_id, 0)
+    weekly_xp = xp_weekly.get(user_id, 0)
+    monthly_xp = xp_monthly.get(user_id, 0)
+
+    daily_pos = get_position(xp_daily) or "Non classificato"
+    weekly_pos = get_position(xp_weekly) or "Non classificato"
+    monthly_pos = get_position(xp_monthly) or "Non classificato"
+
+    total_xp = monthly_xp
+
+    sorted_levels = sorted(ROLE_LEVELS.keys())
+    next_level_xp = None
+    next_level_role = None
+    for lvl in sorted_levels:
+        if lvl > total_xp:
+            next_level_xp = lvl
+            next_level_role = guild.get_role(ROLE_LEVELS[lvl])
             break
-    if position is None:
-        position = "Non classificato"
+
+    xp_to_next_level = next_level_xp - total_xp if next_level_xp else 0
+
+    roles_have = []
+    roles_next = []
+    for xp_req, role_id in sorted(ROLE_LEVELS.items()):
+        role = guild.get_role(role_id)
+        if role in member.roles:
+            roles_have.append(role.name)
+        elif xp_req > total_xp:
+            roles_next.append(role.name)
 
     embed = discord.Embed(
         title=f"📊 Statistiche XP di {member.display_name}",
@@ -221,45 +220,155 @@ async def rank(ctx, member: discord.Member = None):
         timestamp=datetime.now(TIMEZONE)
     )
     embed.set_thumbnail(url=member.display_avatar.url)
-    embed.add_field(name="XP Mensile", value=str(total_xp))
-    embed.add_field(name="Posizione in classifica", value=str(position))
+
+    embed.add_field(name="XP Giornalieri", value=str(daily_xp), inline=True)
+    embed.add_field(name="Posizione Giornaliera", value=str(daily_pos), inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+    embed.add_field(name="XP Settimanali", value=str(weekly_xp), inline=True)
+    embed.add_field(name="Posizione Settimanale", value=str(weekly_pos), inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+    embed.add_field(name="XP Mensili (Totale)", value=str(monthly_xp), inline=True)
+    embed.add_field(name="Posizione Mensile", value=str(monthly_pos), inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+    if next_level_xp:
+        embed.add_field(
+            name=f"XP per prossimo livello ({next_level_role.name if next_level_role else 'Sconosciuto'})",
+            value=f"{xp_to_next_level} XP mancanti",
+            inline=False
+        )
+    else:
+        embed.add_field(name="Livello massimo raggiunto", value="Hai raggiunto il livello più alto!", inline=False)
+
+    embed.add_field(name="Ruoli attuali", value=", ".join(roles_have) if roles_have else "Nessuno", inline=False)
+    embed.add_field(name="Ruoli prossimi da raggiungere", value=", ".join(roles_next) if roles_next else "Nessuno", inline=False)
+
     await ctx.send(embed=embed)
 
-# --- COMANDO RESET XP e RUOLI ---
-@bot.command(name="resetxp")
-@commands.has_permissions(administrator=True)
-async def reset_xp(ctx):
-    xp_daily.clear()
-    xp_weekly.clear()
-    xp_monthly.clear()
-    save_xp()
+@bot.command(name="classifica")
+async def classifica(ctx):
+    embed = create_leaderboard_embed("🏆 Classifica Mensile XP", xp_monthly, ctx.guild)
+    await ctx.send(embed=embed)
 
-    # Rimuovi ruoli XP da tutti i membri
-    for member in ctx.guild.members:
-        roles_to_remove = []
-        for xp_req, role_id in ROLE_LEVELS.items():
-            role = ctx.guild.get_role(role_id)
-            if role in member.roles:
-                roles_to_remove.append(role)
-        if roles_to_remove:
-            try:
-                await member.remove_roles(*roles_to_remove, reason="Reset XP e ruoli")
-            except Exception as e:
-                print(f"Errore rimuovendo ruoli da {member.display_name}: {e}")
+# === COMANDI SOCIAL ===
+@bot.command(name="twitch")
+async def twitch(ctx):
+    embed = discord.Embed(
+        title="🎮 Twitch di Tw3nty Mars",
+        description="[Clicca qui per visitare il canale Twitch](https://www.twitch.tv/tw3nty_mars?sr=a)",
+        color=XP_COLOR
+    )
+    embed.set_thumbnail(url="https://static.twitchcdn.net/assets/favicon-32-e29e246c157142c94346.png")
+    await ctx.send(embed=embed)
 
-    await ctx.send("✅ XP e ruoli resettati per tutti! Ora puoi riassegnare i ruoli manualmente e ricominciare da zero.")
+@bot.command(name="youtube", aliases=["yt"])
+async def youtube(ctx):
+    embed = discord.Embed(
+        title="▶️ Canale YouTube di Tw3nty Mars",
+        description="[Guarda i video qui](https://www.youtube.com/channel/UC6E0F7DUBbF2ZP6GRV8cHFg)",
+        color=XP_COLOR
+    )
+    embed.set_thumbnail(url="https://www.youtube.com/s/desktop/6ee67e1a/img/favicon_32.png")
+    await ctx.send(embed=embed)
 
-# Social
-# (Tutti i tuoi comandi social qui... lasciati invariati)
+@bot.command(name="tiktok")
+async def tiktok(ctx):
+    embed = discord.Embed(
+        title="📱 TikTok di Tw3nty Mars",
+        description=(
+            "Profilo per le live: [tw3ntymars](https://www.tiktok.com/@tw3ntymars)\n"
+            "Profilo personale: [martinaastasi](https://www.tiktok.com/@martinaastasi)"
+        ),
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
 
+@bot.command(name="instagram", aliases=["ig"])
+async def instagram(ctx):
+    embed = discord.Embed(
+        title="📸 Instagram di Tw3nty Mars",
+        description="[Visita il profilo Instagram](https://www.instagram.com/tw3nty_mars)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="discord", aliases=["ds"])
+async def discord_cmd(ctx):
+    embed = discord.Embed(
+        title="💬 Server Discord",
+        description="[Unisciti qui!](https://discord.gg/xKqWsTYRqy)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+# === COMANDI INFO ===
+@bot.command(name="orari")
+async def orari(ctx):
+    embed = discord.Embed(
+        title="📅 Streaming Schedule",
+        description="TUTTI I GIORNI DALLE 18:00 ALLE 21:00🕑 (salvo imprevisti, vi avvisiamo su IG e DS)",
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name="comandi")
+async def comandi(ctx):
+    embed = discord.Embed(
+        title="📜 Lista comandi",
+        description=(
+            "!twitch - Link Twitch\n"
+            "!youtube / !yt - Link YouTube\n"
+            "!tiktok - Link TikTok\n"
+            "!instagram / !ig - Link Instagram\n"
+            "!discord / !ds - Link Discord\n"
+            "!orari - Orario streaming\n"
+            "!comandi - Questa lista\n"
+            "!testxp - Aggiungi XP di test\n"
+            "!setxp - Aggiungi XP personalizzati\n"
+            "!rank - Vedi il tuo livello XP\n"
+            "!classifica - Classifica mensile XP"
+        ),
+        color=XP_COLOR
+    )
+    await ctx.send(embed=embed)
+
+# === COMANDO SEND ===
+@bot.command(name="send")
+async def send(ctx, *, message=None):
+    if not ctx.author.guild_permissions.manage_messages:
+        await ctx.send("❌ Non hai i permessi per usare questo comando.")
+        return
+
+    files = []
+    if ctx.message.attachments:
+        try:
+            files = [await attachment.to_file() for attachment in ctx.message.attachments]
+        except Exception as e:
+            await ctx.send(f"❌ Errore caricamento allegati: {e}")
+            return
+
+    try:
+        await ctx.message.delete()
+    except discord.Forbidden:
+        await ctx.send("❌ Non ho i permessi per eliminare il messaggio.")
+        return
+    except Exception as e:
+        await ctx.send(f"⚠️ Errore eliminazione messaggio: {e}")
+        return
+
+    if message or files:
+        await ctx.send(content=message, files=files)
+    else:
+        await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
-    scheduler.add_job(send_leaderboards, 'cron', day_of_week='mon', hour=8, minute=0)
+    scheduler.add_job(send_leaderboards, 'cron', day_of_week='mon', hour=8, minute=0, timezone=TIMEZONE)
     scheduler.start()
-    asyncio.create_task(periodic_save())
 
 if __name__ == "__main__":
-    load_xp()
     keep_alive()
     bot.run(TOKEN)
+
