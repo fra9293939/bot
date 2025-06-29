@@ -65,7 +65,7 @@ async def discord_cmd(ctx):
 async def orari(ctx):
     embed = discord.Embed(
         title="📅 Streaming Schedule",
-        description="TUTTI I GIORNI DALLE 20:30 ALLE 23:30! 🕑\n(salvo imprevisti, vi avvisiamo su IG e Discord)",
+        description="TUTTI I GIORNI DALLE 18:00 ALLE 21:00! 🕑\n(salvo imprevisti, vi avvisiamo su IG e Discord)",
         color=0xB500FF
     )
     await ctx.send(embed=embed)
