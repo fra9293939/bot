@@ -17,15 +17,36 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    if message.author.id == PRO_BOT_ID:
-        print(f"Rilevato messaggio Pro Bot: {message.content}")
-        try:
-            await message.delete()
-            print("Messaggio cancellato con successo.")
-        except Exception as e:
-            print(f"Errore nella cancellazione: {e}")
-    await bot.process_commands(message)
+    if message.author.id == bot.user.id:
+        return
 
+    if message.author.id == PRO_BOT_ID:
+        try:
+            # DEBUG
+            print("📨 Messaggio ricevuto da Pro Bot")
+            print("Contenuto:", message.content)
+            print("Embed:", message.embeds)
+            print("Allegati:", message.attachments)
+
+            if message.content.startswith("/rank") or message.content.startswith("/top") or message.embeds or message.attachments:
+                await message.delete()
+
+                target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+                if target_channel is None:
+                    target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
+
+                # Crea nuovo messaggio
+                forward_content = f"Messaggio spostato dal canale #{message.channel.name}:"
+
+                files = [await att.to_file() for att in message.attachments]
+                embeds = message.embeds
+
+                await target_channel.send(content=forward_content, embeds=embeds if embeds else None, files=files if files else None)
+
+        except Exception as e:
+            print(f"❌ Errore nello spostare messaggio Pro Bot: {e}")
+
+    await bot.process_commands(message)
 
 
 # --- COMANDI DEL BOT ---
