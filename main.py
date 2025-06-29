@@ -9,6 +9,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+PRO_BOT_ID = 282859044593598464
+CLASSIFICA_CHANNEL_ID = 1388623669886189628
+
 @bot.command(name="twitch")
 async def twitch(ctx):
     embed = discord.Embed(
@@ -113,6 +116,30 @@ async def send(ctx, *, message=None):
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # Se il messaggio è inviato da Pro Bot e contiene /rank o /top
+    if message.author.bot and message.author.id == PRO_BOT_ID:
+        content_lower = message.content.lower()
+        if "/rank" in content_lower or "/top" in content_lower:
+            classifica_channel = bot.get_channel(CLASSIFICA_CHANNEL_ID)
+            if classifica_channel:
+                # Invia il messaggio nel canale classifica
+                await classifica_channel.send(f"📊 Messaggio di {message.author.mention} spostato qui:\n{message.content}")
+                # Prova a cancellare il messaggio originale
+                try:
+                    await message.delete()
+                except discord.Forbidden:
+                    print("❌ Non ho permessi per cancellare il messaggio di Pro Bot.")
+                except Exception as e:
+                    print(f"⚠️ Errore cancellando messaggio Pro Bot: {e}")
+            return
+
+    await bot.process_commands(message)
 
 @bot.event
 async def on_ready():
