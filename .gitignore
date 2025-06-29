@@ -1,0 +1,9 @@
+# 🔐 File sensibili
+.env
+
+# 🧹 File temporanei Python
+__pycache__/
+*.pyc
+
+# 🐍 Ambiente virtuale (se usi venv)
+venv/
