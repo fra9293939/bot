@@ -1,3 +1,4 @@
+from pymongo import MongoClient
 import discord
 from discord.ext import commands, tasks
 import os
@@ -6,27 +7,33 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from collections import defaultdict
 from keep_alive import keep_alive
-from pymongo import MongoClient
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 MONGODB_URI = os.getenv("MONGODB_URI")
 
-mongo_client = MongoClient(MONGODB_URI)
-db = mongo_client["discord_bot_db"]
-xp_collection = db["xp_collection"]
+# --- MongoDB connection with fallback ---
+def connect_mongo():
+    uri = MONGODB_URI
+    try:
+        client = MongoClient(uri)
+        client.admin.command('ping')  # verifica connessione
+        print("Connessione a MongoDB riuscita!")
+        return client
+    except Exception as e:
+        print("Errore di connessione MongoDB:", e)
+        return None
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
+mongo_client = connect_mongo()
+if mongo_client is not None:
+    db = mongo_client["discord_bot_db"]
+    xp_collection = db["xp_collection"]
+else:
+    xp_collection = None  # MongoDB non disponibile
 
 # --- CONFIG ---
 
 TIMEZONE = ZoneInfo("Europe/Rome")
-
 XP_COLOR = 0xB500FF
-
 COOLDOWN = timedelta(minutes=7)
 
 ROLE_LEVELS = {
@@ -63,6 +70,8 @@ user_cooldowns = {}
 last_daily_reset = None
 last_weekly_reset = None
 last_monthly_reset = None
+
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
 
 # --- XP LOGIC ---
 
@@ -108,7 +117,6 @@ async def check_level_up(user_id: int, member: discord.Member, new_level: int):
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         await channel.send(embed=embed)
 
-    # Gestione ruoli, assegna solo il ruolo più alto raggiunto e non duplicati
     highest_role_level = max([lvl for lvl in ROLE_LEVELS.keys() if lvl <= new_level], default=None)
     if highest_role_level is not None:
         role_id = ROLE_LEVELS[highest_role_level]
@@ -129,6 +137,9 @@ def convert_keys_to_str(d):
     return {str(k): v for k, v in d.items()}
 
 def save_data():
+    if xp_collection is None:
+        print("MongoDB non disponibile, dati non salvati.")
+        return
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     data = {
         "_id": "xp_data",
@@ -140,11 +151,27 @@ def save_data():
         "last_weekly_reset": last_weekly_reset.isoformat() if last_weekly_reset else None,
         "last_monthly_reset": last_monthly_reset.isoformat() if last_monthly_reset else None
     }
-    xp_collection.replace_one({"_id": "xp_data"}, data, upsert=True)
+    try:
+        xp_collection.replace_one({"_id": "xp_data"}, data, upsert=True)
+    except Exception as e:
+        print("Errore nel salvataggio dati:", e)
 
 def load_data():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
-    data = xp_collection.find_one({"_id": "xp_data"})
+    if xp_collection is None:
+        print("MongoDB non disponibile, carico dati in memoria.")
+        now = datetime.now(TIMEZONE)
+        last_daily_reset = now
+        last_weekly_reset = now
+        last_monthly_reset = now
+        return
+
+    try:
+        data = xp_collection.find_one({"_id": "xp_data"})
+    except Exception as e:
+        print("Errore nel caricamento dati:", e)
+        data = None
+
     if not data:
         now = datetime.now(TIMEZONE)
         last_daily_reset = now
@@ -288,17 +315,14 @@ async def reset_checks():
 
     global last_daily_reset, last_weekly_reset, last_monthly_reset
 
-    # Reset giornaliero a mezzanotte
     if last_daily_reset is None or now.date() > last_daily_reset.date():
         reset_daily()
         save_data()
 
-    # Reset settimanale ogni lunedì
     if last_weekly_reset is None or now.isocalendar()[1] > last_weekly_reset.isocalendar()[1]:
         reset_weekly()
         save_data()
 
-    # Reset mensile il primo giorno del mese
     if last_monthly_reset is None or now.month != last_monthly_reset.month:
         reset_monthly()
         save_data()
