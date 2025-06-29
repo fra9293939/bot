@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 from collections import defaultdict
 from zoneinfo import ZoneInfo
+from keep_alive import keep_alive  # Assicurati di avere questo file
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
@@ -23,7 +24,7 @@ CHANNEL_LEVELUP = 1383429600016728074
 XP_COLOR = 0xB500FF
 
 ROLE_LEVELS = {
-    0: 11383431607498571796,
+    0: 1383431607498571796,
     10: 1383433321630924922,
     20: 1383433334343860324,
     40: 1383433340715139244,
@@ -63,7 +64,6 @@ def load_data():
     global xp_daily, xp_weekly, xp_monthly
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     if not os.path.exists(DATA_FILE):
-        # inizializzo i reset con ora attuale
         now = datetime.now(TIMEZONE)
         last_daily_reset = now
         last_weekly_reset = now
@@ -208,7 +208,6 @@ async def classifica(ctx, periodo: str = "mensile"):
 
 @bot.command(name="testxp")
 async def test_xp(ctx):
-    # Solo mod o admin possono usarlo
     if not ctx.author.guild_permissions.manage_roles:
         await ctx.send("Non hai il permesso di usare questo comando.")
         return
@@ -240,7 +239,6 @@ async def xp_set(ctx, member: discord.Member, amount: int):
     if amount < 0:
         await ctx.send("L'importo non può essere negativo.")
         return
-    # Set XP esattamente (solo mensile, per semplicità)
     xp_daily[member.id] = amount
     xp_weekly[member.id] = amount
     xp_monthly[member.id] = amount
@@ -352,6 +350,5 @@ async def comandi(ctx):
 
 # --- Avvio bot ---
 
+keep_alive()
 bot.run(TOKEN)
-
-
