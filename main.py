@@ -1,15 +1,12 @@
 import discord
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import asyncio
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 
-from keep_alive import keep_alive  # Assicurati che funzioni correttamente
-
-# === CONFIGURAZIONE BOT ===
+# --- Configurazione ---
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 intents = discord.Intents.default()
@@ -17,7 +14,7 @@ intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === COSTANTI / ID ===
+# --- Costanti ---
 CHANNEL_DAILY = 1388623669886189628
 CHANNEL_WEEKLY = 1388623669886189628
 CHANNEL_MONTHLY = 1388623669886189628
@@ -36,7 +33,7 @@ ROLE_LEVELS = {
 XP_COLOR = 0xB500FF
 TIMEZONE = ZoneInfo("Europe/Rome")
 
-# === VARIABILI XP ===
+# --- Variabili XP ---
 xp_daily = defaultdict(int)
 xp_weekly = defaultdict(int)
 xp_monthly = defaultdict(int)
@@ -46,7 +43,7 @@ last_monthly_reset = datetime.now(TIMEZONE)
 
 scheduler = AsyncIOScheduler()
 
-# === FUNZIONI XP ===
+# --- Funzioni ---
 def check_resets():
     global last_daily_reset, last_weekly_reset, last_monthly_reset
     now = datetime.now(TIMEZONE)
@@ -121,7 +118,7 @@ async def send_leaderboards():
         except Exception as e:
             print(f"Errore invio classifica in {guild.name}: {e}")
 
-# === EVENTI ===
+# --- Eventi ---
 @bot.event
 async def on_message(message):
     if message.author.bot or message.channel.type == discord.ChannelType.private:
@@ -132,11 +129,58 @@ async def on_message(message):
     await update_roles(message.author, total_xp)
     await bot.process_commands(message)
 
-# === COMANDI XP ===
-# ... (comandi come test_xp, set_xp, rank, classifica, twitch, youtube, ecc.)
-# (tutto invariato come da tuo messaggio, già incluso correttamente)
+# --- Comandi XP e info ---
 
-# === COMANDO SEND ===
+@bot.command(name="test_xp")
+async def test_xp(ctx):
+    await ctx.send(f"XP giornaliero: {xp_daily[ctx.author.id]}, settimanale: {xp_weekly[ctx.author.id]}, mensile: {xp_monthly[ctx.author.id]}")
+
+@bot.command(name="set_xp")
+@commands.has_permissions(administrator=True)
+async def set_xp(ctx, user: discord.Member, amount: int):
+    xp_daily[user.id] = amount
+    xp_weekly[user.id] = amount
+    xp_monthly[user.id] = amount
+    await ctx.send(f"XP di {user.display_name} impostato a {amount} per tutte le classifiche.")
+
+@bot.command(name="rank")
+async def rank(ctx, user: discord.Member = None):
+    user = user or ctx.author
+    total_xp = xp_monthly[user.id]
+    await ctx.send(f"{user.display_name} ha {total_xp} XP mensili.")
+
+@bot.command(name="classifica")
+async def classifica(ctx, periodo: str = "mensile"):
+    if periodo not in ["giornaliero", "settimanale", "mensile"]:
+        await ctx.send("Usa !classifica [giornaliero|settimanale|mensile]")
+        return
+    if periodo == "giornaliero":
+        xp_dict = xp_daily
+    elif periodo == "settimanale":
+        xp_dict = xp_weekly
+    else:
+        xp_dict = xp_monthly
+
+    embed = create_leaderboard_embed(f"🏆 Classifica {periodo.capitalize()} XP", xp_dict, ctx.guild)
+    await ctx.send(embed=embed)
+
+@bot.command(name="twitch")
+async def twitch(ctx, username: str = None):
+    if not username:
+        await ctx.send("Usa: !twitch <nome_utente>")
+        return
+    # Inserisci qui l'integrazione reale Twitch o un link diretto
+    await ctx.send(f"https://www.twitch.tv/{username}")
+
+@bot.command(name="youtube")
+async def youtube(ctx, username: str = None):
+    if not username:
+        await ctx.send("Usa: !youtube <nome_utente>")
+        return
+    # Inserisci qui l'integrazione reale YouTube o un link diretto
+    await ctx.send(f"https://www.youtube.com/{username}")
+
+# --- Comando send ---
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
@@ -165,15 +209,13 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-# ✅ UNICO on_ready
+# --- Ready ---
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
     scheduler.add_job(send_leaderboards, 'cron', day_of_week='mon', hour=8, minute=0, timezone=TIMEZONE)
     scheduler.start()
 
-# === AVVIO ===
 if __name__ == "__main__":
-    keep_alive()
     bot.run(TOKEN)
 
