@@ -22,35 +22,26 @@ async def on_message(message):
 
     if message.author.id == PRO_BOT_ID:
         content = message.content.lower()
-
-        if content.startswith("/rank") or content.startswith("/top") or True:  # Forziamo su tutti i messaggi di Pro Bot se vuoi
+        if content.startswith("/rank") or content.startswith("/top"):
             try:
                 target_channel = bot.get_channel(TARGET_CHANNEL_ID)
                 if target_channel is None:
                     target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
 
-                # Copia eventuali embed o file
                 embeds = message.embeds
-                files = []
-                if message.attachments:
-                    for attachment in message.attachments:
-                        fp = await attachment.to_file()
-                        files.append(fp)
+                files = [await att.to_file() for att in message.attachments]
 
-                # Cancella il messaggio originale
-                await message.delete()
+                # Provo ad eliminare il messaggio originale
+                try:
+                    await message.delete()
+                except Exception as e:
+                    print(f"Impossibile eliminare messaggio originale: {e}")
 
-                # Invio nota con canale origine
-                await target_channel.send(f"Messaggio spostato dal canale #{message.channel.name}:")
-
-                # Reinvia embed o file o testo
                 if embeds:
                     for embed in embeds:
-                        await target_channel.send(embed=embed)
-                elif files:
-                    await target_channel.send(files=files)
+                        await target_channel.send(content=f"Messaggio spostato dal canale #{message.channel.name}:", embed=embed, files=files)
                 else:
-                    await target_channel.send(message.content)
+                    await target_channel.send(f"Messaggio spostato dal canale #{message.channel.name}:\n{message.content}", files=files)
 
             except Exception as e:
                 print(f"Errore nello spostare messaggio Pro Bot: {e}")
