@@ -4,6 +4,8 @@ import os
 from keep_alive import keep_alive
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+PRO_BOT_ID = 282859044593598464
+TARGET_CHANNEL_ID = 1388623669886189628
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -13,6 +15,34 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
 
+@bot.event
+async def on_message(message):
+    # Ignora i messaggi dal bot stesso
+    if message.author.id == bot.user.id:
+        return
+
+    # Controlla messaggi di Pro Bot
+    if message.author.id == PRO_BOT_ID:
+        content = message.content.lower()
+        if content.startswith("/rank") or content.startswith("/top"):
+            try:
+                # Cancella messaggio originale
+                await message.delete()
+                # Prendi il canale target dove spostare il messaggio
+                target_channel = bot.get_channel(TARGET_CHANNEL_ID)
+                if target_channel is None:
+                    target_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
+
+                # Invia messaggio spostato con indicazione del canale d'origine
+                forward_content = f"Messaggio spostato dal canale #{message.channel.name}:\n{message.content}"
+                await target_channel.send(forward_content)
+            except Exception as e:
+                print(f"Errore nello spostare messaggio Pro Bot: {e}")
+
+    # Permetti ai comandi di funzionare normalmente
+    await bot.process_commands(message)
+
+# COMANDI DEL BOT
 @bot.command(name="twitch")
 async def twitch(ctx):
     embed = discord.Embed(
@@ -83,7 +113,8 @@ async def comandi(ctx):
             "!instagram / !ig - Link Instagram\n"
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
-            "!comandi - Questa lista"
+            "!comandi - Questa lista\n"
+            "!send - Invia messaggi o allegati (permessi richiesti)"
         ),
         color=0xB500FF
     )
@@ -119,3 +150,4 @@ async def send(ctx, *, message=None):
 
 keep_alive()
 bot.run(TOKEN)
+
