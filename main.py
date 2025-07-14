@@ -79,6 +79,16 @@ async def orari(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
+    
+@bot.command(name="socials")
+async def socials(ctx):
+    embed = discord.Embed(
+        title="🌐 Tutti i Social di Tw3nty Mars",
+        description="[Clicca qui per accedere a tutti i link](https://linktr.ee/Tw3ntyMars)",
+        color=0xB500FF
+    )
+    embed.set_thumbnail(url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Linktree_Logo.svg/512px-Linktree_Logo.svg.png")
+    await ctx.send(embed=embed)
 
 @bot.command(name="comandi")
 async def comandi(ctx):
@@ -91,8 +101,8 @@ async def comandi(ctx):
             "!instagram / !ig - Link Instagram\n"
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
-            "!comandi - Questa lista\n"
-            "!send - Invia messaggi o allegati (permessi richiesti)"
+            "!socials - Tutti i link social\n"
+            "!comandi - Questa lista"
         ),
         color=0xB500FF
     )
