@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import os
+import asyncio
 from keep_alive import keep_alive
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -17,8 +18,6 @@ async def on_ready():
 
 import aiohttp
 from io import BytesIO
-
-
 
 # --- COMANDI DEL BOT ---
 @bot.command(name="twitch")
@@ -122,7 +121,6 @@ async def send(ctx, *, message=None):
             await ctx.send(f"❌ Errore nel caricamento allegati: {e}")
             return
 
-    # Cancellazione sicura del messaggio originale
     try:
         await ctx.message.delete()
     except discord.NotFound:
@@ -137,6 +135,23 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-keep_alive()
-bot.run(TOKEN)
+# --- Gestione connessione con retry e pausa se 429 ---
+async def start_bot():
+    while True:
+        try:
+            keep_alive()
+            await bot.start(TOKEN)
+        except discord.HTTPException as e:
+            if e.status == 429:
+                print("⚠️ Rate limit rilevato! Aspetto 15 minuti prima di riprovare...")
+                await asyncio.sleep(900)  # 15 minuti
+            else:
+                print(f"Errore HTTP: {e}")
+                await asyncio.sleep(60)  # Attende 1 minuto prima di riprovare
+        except Exception as e:
+            print(f"Errore generico: {e}")
+            await asyncio.sleep(60)  # Attende 1 minuto prima di riprovare
+
+if __name__ == "__main__":
+    asyncio.run(start_bot())
 
