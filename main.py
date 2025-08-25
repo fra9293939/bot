@@ -147,25 +147,30 @@ async def on_ready():
 
 @bot.command(name="embed")
 async def embed(ctx, *, full_text: str):
-    # Dividi il testo in righe
+    """
+    Comando universale:
+    - Prima riga rossa
+    - Il resto normale nello stesso embed
+    """
+    # Separiamo la prima riga dal resto
     lines = full_text.splitlines()
     if not lines:
-        await ctx.send("❌ Devi scrivere almeno una riga di testo!")
+        await ctx.send("❌ Devi scrivere almeno una riga!")
         return
 
-    red_line = lines[0]  # prima riga rossa
-    white_text = "\n".join(lines[1:])  # resto bianco
+    red_line = lines[0]
+    white_text = "\n".join(lines[1:])
 
-    # Creazione embed
+    # Creiamo embed senza titolo
     embed = discord.Embed(color=discord.Color.blue())
+
+    # Prima riga rossa con diff, resto normale
     if white_text:
         embed.description = f"```diff\n- {red_line}\n```\n{white_text}"
     else:
         embed.description = f"```diff\n- {red_line}\n```"
 
     await ctx.send(embed=embed)
-
-
 
 
 
