@@ -135,17 +135,21 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
         
-@bot.command(name="embed")
-async def embed(ctx, title: str, *, description: str):
-    # Qui dentro puoi usare i blocchi markdown, esempio:
-    # ```diff\n- ROSSO\n```
-    
+@bot.command(name="embeddiff")
+async def embeddiff(ctx, red_text: str, *, description: str = ""):
+    """
+    Manda un embed con una parte rossa (diff) e una descrizione sotto.
+    Uso: !embeddiff "DISCORD TOS" Si prega di rispettare i termini...
+    """
     embed = discord.Embed(
-        title=title,
-        description=description,
+        description=(
+            f"```diff\n- {red_text}\n```\n"
+            f"{description}"
+        ),
         color=0xB500FF
     )
     await ctx.send(embed=embed)
+
 
 
 
