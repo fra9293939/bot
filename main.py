@@ -135,20 +135,19 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
         
-@bot.command(name="embeddiff")
-async def embeddiff(ctx, red_text: str, *, description: str = ""):
-    """
-    Manda un embed con una parte rossa (diff) e una descrizione sotto.
-    Uso: !embeddiff "DISCORD TOS" Si prega di rispettare i termini...
-    """
-    embed = discord.Embed(
-        description=(
-            f"```diff\n- {red_text}\n```\n"
-            f"{description}"
-        ),
-        color=0xB500FF
+@bot.command(name="embed_diff")
+async def embed_diff(ctx, titolo: str, *, testo: str):
+    embed = discord.Embed(color=0xB500FF)
+
+    # titolo rosso dinamico
+    embed.add_field(
+        name=f"```diff\n- {titolo}\n```",
+        value=testo,
+        inline=False
     )
+
     await ctx.send(embed=embed)
+
 
 
 
