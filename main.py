@@ -146,25 +146,17 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
 @bot.command(name="embed")
-async def embed(ctx, *, full_text: str):
-    lines = full_text.splitlines()
-    if not lines:
-        await ctx.send("❌ Devi scrivere almeno una riga!")
-        return
-
-    red_line = lines[0]  # prima riga rossa
-    white_text = "\n".join(lines[1:])  # resto testo bianco
-
-    # Embed senza titolo
+async def embed(ctx):
     embed = discord.Embed(color=discord.Color.blue())
-
-    # Se c'è solo la riga rossa
-    if white_text:
-        embed.description = f"```diff\n- {red_line}```\n{white_text}"
-    else:
-        embed.description = f"```diff\n- {red_line}```"
-
+    
+    # Campo rosso con diff
+    embed.add_field(name="\u200b", value="```diff\n- DISCORD TOS\n```", inline=False)
+    
+    # Campo bianco normale
+    embed.add_field(name="\u200b", value="Si prega di rispettare i Termini di Servizio di Discord, che elencano tutte le regole da seguire sulla piattaforma.\nhttps://discord.com/terms\nhttps://discord.com/guidelines", inline=False)
+    
     await ctx.send(embed=embed)
+
 
 
 
