@@ -145,17 +145,19 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-@bot.command()
-async def embed_custom(ctx):
-    # Creiamo l'embed
+@bot.command(name="embed")
+async def embed(ctx, red_line: str, *, white_text: str):
+    """
+    Crea un embed senza titolo:
+    - red_line: testo rosso
+    - white_text: testo bianco
+    """
     embed = discord.Embed(
-        title="Titolo Embed",  # il titolo rimane bianco/nero
-        color=discord.Color.blue()  # colore del bordo dell'embed
+        color=discord.Color.blue()  # colore bordo embed
     )
+    embed.description = f"""```diff
+- {red_line}
 
-    # Testo: prima parte rossa con diff, poi testo normale bianco
-    embed.description = """```diff
-- Questo testo appare rosso come se fosse il titolo
 
 
 # --- Gestione connessione con retry e pausa se 429 ---
