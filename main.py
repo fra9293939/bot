@@ -144,17 +144,14 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-
 @bot.command(name="embed")
 async def embed(ctx, *, contenuto: str):
     """
-    Comando universale per creare embed con prima riga rossa e resto bianco.
-    Separatore tra rosso e bianco: | (pipe)
-    Uso:
-    !embed DISCORD TOS | Si prega di rispettare i Termini di Servizio...
+    Comando universale per embed con prima riga rossa e testo bianco.
+    Usa | come separatore tra riga rossa e testo bianco.
     """
     if "|" not in contenuto:
-        await ctx.send("❌ Devi usare il separatore '|' per distinguere la riga rossa dal testo bianco.")
+        await ctx.send("❌ Usa il separatore '|' tra riga rossa e testo bianco!")
         return
 
     rosso, bianco = map(str.strip, contenuto.split("|", 1))
@@ -162,6 +159,7 @@ async def embed(ctx, *, contenuto: str):
     embed = discord.Embed(color=discord.Color.blue())
     embed.description = f"""```diff
 - {rosso}
+
 
 
 
