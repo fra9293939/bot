@@ -134,6 +134,16 @@ async def send(ctx, *, message=None):
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+        
+@bot.command(name="embed")
+async def embed(ctx, title: str, *, description: str):
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=0xB500FF  # puoi cambiare colore o renderlo parametro opzionale
+    )
+    await ctx.send(embed=embed)
+
 
 # --- Gestione connessione con retry e pausa se 429 ---
 async def start_bot():
