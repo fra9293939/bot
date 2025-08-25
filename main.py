@@ -144,18 +144,19 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-
 @bot.command(name="embed")
-async def embed(ctx):
+async def embed(ctx, rosso: str, *, bianco: str):
+    """
+    Comando universale per creare embed con:
+    - Prima riga rossa (diff)
+    - Testo bianco normale sotto
+    Uso: !embed "Riga rossa" testo bianco sotto
+    """
     embed = discord.Embed(color=discord.Color.blue())
-    
-    # Campo rosso con diff
-    embed.add_field(name="\u200b", value="```diff\n- DISCORD TOS\n```", inline=False)
-    
-    # Campo bianco normale
-    embed.add_field(name="\u200b", value="Si prega di rispettare i Termini di Servizio di Discord, che elencano tutte le regole da seguire sulla piattaforma.\nhttps://discord.com/terms\nhttps://discord.com/guidelines", inline=False)
-    
-    await ctx.send(embed=embed)
+
+    # Costruzione descrizione
+    embed.description = f"""```diff
+- {rosso}
 
 
 
