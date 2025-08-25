@@ -146,17 +146,20 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
 @bot.command(name="embed")
-async def embed(ctx, red_line: str, *, white_text: str):
+async def embed(ctx, *, full_text: str):
     """
     Crea un embed senza titolo:
-    - red_line: testo rosso
-    - white_text: testo bianco
+    - La prima riga sarà rossa
+    - Il resto sarà bianco
     """
-    embed = discord.Embed(
-        color=discord.Color.blue()  # colore bordo embed
-    )
+    lines = full_text.split("\n")
+    red_line = lines[0]  # prima riga diventa rossa
+    white_text = "\n".join(lines[1:])  # resto testo bianco
+
+    embed = discord.Embed(color=discord.Color.blue())
     embed.description = f"""```diff
 - {red_line}
+
 
 
 
