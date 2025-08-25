@@ -144,21 +144,27 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+
 @bot.command(name="embed")
 async def embed(ctx, *, contenuto: str):
     """
-    Comando universale per embed con prima riga rossa e testo bianco.
-    Usa | come separatore tra riga rossa e testo bianco.
+    Comando universale per embed con più righe rosse e testo bianco.
+    Usa il separatore || tra riga rossa e testo bianco.
+    Per più blocchi, separali con ;; (doppio punto e virgola)
     """
-    if "|" not in contenuto:
-        await ctx.send("❌ Usa il separatore '|' tra riga rossa e testo bianco!")
-        return
+    blocchi = contenuto.split(";;")  # separa più blocchi
+    descrizione = ""
 
-    rosso, bianco = map(str.strip, contenuto.split("|", 1))
+    for blocco in blocchi:
+        if "||" not in blocco:
+            await ctx.send("❌ Ogni blocco deve avere '||' tra rosso e testo bianco!")
+            return
+        rosso, bianco = map(str.strip, blocco.split("||", 1))
+        descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
 
     embed = discord.Embed(color=discord.Color.blue())
-    embed.description = f"""```diff
-- {rosso}
+    embed.description = descrizione.strip()  # rimuove spazi extra finali
+    await ctx.send(embed=embed)
 
 
 
