@@ -137,12 +137,16 @@ async def send(ctx, *, message=None):
         
 @bot.command(name="embed")
 async def embed(ctx, title: str, *, description: str):
+    # Qui dentro puoi usare i blocchi markdown, esempio:
+    # ```diff\n- ROSSO\n```
+    
     embed = discord.Embed(
         title=title,
         description=description,
-        color=0xB500FF  # puoi cambiare colore o renderlo parametro opzionale
+        color=0xB500FF
     )
     await ctx.send(embed=embed)
+
 
 
 # --- Gestione connessione con retry e pausa se 429 ---
