@@ -171,7 +171,8 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
             continue
         if "||" in blocco:
             rosso, bianco = map(str.strip, blocco.split("||", 1))
-            descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
+            descrizione += f"```diff\n{rosso}\n```\n{bianco}\n\n"
+            
         else:
             descrizione += f"{blocco}\n\n"
 
