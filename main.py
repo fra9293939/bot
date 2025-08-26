@@ -137,10 +137,9 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-# --- Comando embed aggiornato ---
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
-    # Converti colore in int
+    # Gestione colore
     if colore:
         colore = colore.lstrip("#")
         try:
@@ -151,7 +150,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     else:
         colore_int = discord.Color.blue().value
 
-    # Prepara descrizione
+    # Creazione descrizione
     blocchi = contenuto.split(";;")
     descrizione = ""
     for blocco in blocchi:
@@ -164,56 +163,51 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     embed = discord.Embed(color=colore_int, description=descrizione.strip())
     message = await ctx.send(embed=embed)
 
-    # Invia DM all'autore con pulsante per modificare
+    # Pulsante per modificare **questo embed specifico**
     class ModificaEmbed(ui.View):
+        def __init__(self, message, autore):
+            super().__init__(timeout=None)
+            self.message = message
+            self.autore = autore
+
         @ui.button(label="Modifica embed", style=discord.ButtonStyle.blurple)
         async def modify(self, interaction: discord.Interaction, button: ui.Button):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message("❌ Solo chi ha creato l'embed può modificarlo!", ephemeral=True)
+            if interaction.user != self.autore:
+                await interaction.response.send_message(
+                    "❌ Solo chi ha creato l'embed può modificarlo!", ephemeral=True
+                )
                 return
 
             await interaction.response.send_message(
-                "📩 Inviami il nuovo contenuto e, se vuoi, un nuovo colore all'inizio (es. #FF0000 ;; ROSSO || Bianco):",
-                ephemeral=True
+                "📩 Inviami il nuovo contenuto (usa `;;` e `||` come prima):", ephemeral=True
             )
 
             def msg_check(m):
-                return m.author == ctx.author and isinstance(m.channel, discord.DMChannel)
+                return m.author == self.autore and isinstance(m.channel, discord.DMChannel)
 
             try:
                 dm_msg = await bot.wait_for("message", check=msg_check, timeout=300)
             except asyncio.TimeoutError:
-                await ctx.author.send("⌛ Tempo scaduto, embed non modificato.")
+                await self.autore.send("⌛ Tempo scaduto, embed non modificato.")
                 return
 
             nuovo_contenuto = dm_msg.content
-
-            # Controlla se l'utente ha indicato un nuovo colore
-            if nuovo_contenuto.startswith("#"):
-                try:
-                    nuova_riga = nuovo_contenuto.split(";;", 1)
-                    nuovo_colore = nuova_riga[0].lstrip("#")
-                    colore_int = int(nuovo_colore, 16)
-                    nuovo_contenuto = nuova_riga[1]  # rimane solo il contenuto
-                except Exception:
-                    await ctx.author.send("❌ Formato colore non valido, uso colore precedente.")
-
-            # Prepara nuova descrizione
             blocchi = nuovo_contenuto.split(";;")
             descrizione = ""
             for blocco in blocchi:
                 if "||" not in blocco:
-                    await ctx.author.send("❌ Ogni blocco deve avere '||'!")
+                    await self.autore.send("❌ Ogni blocco deve avere '||'!")
                     return
                 rosso, bianco = map(str.strip, blocco.split("||", 1))
                 descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
 
+            # Modifica embed esistente
             embed.description = descrizione.strip()
-            embed.color = discord.Color(colore_int)
-            await message.edit(embed=embed)
-            await ctx.author.send("✅ Embed aggiornato!")
+            await self.message.edit(embed=embed)
+            await self.autore.send("✅ Embed aggiornato!")
 
-    await ctx.author.send("Il tuo embed è stato creato!", view=ModificaEmbed())
+    # Invia DM all'autore con il pulsante per modificare questo embed
+    await ctx.author.send("Il tuo embed è stato creato!", view=ModificaEmbed(message, ctx.author))
 
 # --- Avvio bot con retry ---
 async def start_bot():
