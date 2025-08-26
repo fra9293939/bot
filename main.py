@@ -135,8 +135,19 @@ async def send(ctx, *, message=None):
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
+import discord
+from discord.ext import commands
+from discord import app_commands, ui
+import asyncio
+import os
 
-# --- Comando universale embed con modifica tramite reaction ---
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- Comando embed ---
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     if colore:
@@ -144,7 +155,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
         try:
             colore_int = int(colore, 16)
         except ValueError:
-            await ctx.send("❌ Colore non valido!")
+            await ctx.send("❌ Colore non valido! Usa esadecimale tipo #FF0000")
             return
     else:
         colore_int = discord.Color.blue().value
@@ -161,24 +172,26 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     embed = discord.Embed(color=colore_int, description=descrizione.strip())
     message = await ctx.send(embed=embed)
 
-    # Aggiunge reaction per modificare
-    await message.add_reaction("✏️")
+    # Invia DM all'autore con pulsante per modificare
+    class ModificaEmbed(ui.View):
+        @ui.button(label="Modifica embed", style=discord.ButtonStyle.blurple)
+        async def modify(self, interaction: discord.Interaction, button: ui.Button):
+            if interaction.user != ctx.author:
+                await interaction.response.send_message("❌ Solo chi ha creato l'embed può modificarlo!", ephemeral=True)
+                return
 
-    def check(reaction, user):
-        return user == ctx.author and str(reaction.emoji) == "✏️" and reaction.message.id == message.id
+            await interaction.response.send_message("📩 Inviami il nuovo contenuto (usa `;;` e `||` come prima):", ephemeral=True)
 
-    while True:
-        try:
-            reaction, user = await bot.wait_for("reaction_add", timeout=3600.0, check=check)
-            
-            await ctx.author.send("📩 Inviami il nuovo contenuto dell'embed (usa `;;` e `||` come prima):")
-            
             def msg_check(m):
                 return m.author == ctx.author and isinstance(m.channel, discord.DMChannel)
 
-            dm_msg = await bot.wait_for("message", check=msg_check, timeout=300.0)
-            nuovo_contenuto = dm_msg.content
+            try:
+                dm_msg = await bot.wait_for("message", check=msg_check, timeout=300)
+            except asyncio.TimeoutError:
+                await ctx.author.send("⌛ Tempo scaduto, embed non modificato.")
+                return
 
+            nuovo_contenuto = dm_msg.content
             blocchi = nuovo_contenuto.split(";;")
             descrizione = ""
             for blocco in blocchi:
@@ -191,10 +204,11 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
             embed.description = descrizione.strip()
             await message.edit(embed=embed)
             await ctx.author.send("✅ Embed aggiornato!")
-            await message.remove_reaction("✏️", ctx.author)
 
-        except asyncio.TimeoutError:
-            break
+    await ctx.author.send("Il tuo embed è stato creato!", view=ModificaEmbed())
+
+bot.run(TOKEN)
+
 
 # --- Avvio bot con retry ---
 async def start_bot():
