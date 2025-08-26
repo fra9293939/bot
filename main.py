@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands
-import os
+from discord import ui
 import asyncio
+import os
 from keep_alive import keep_alive
 
 # --- Config ---
@@ -135,21 +136,11 @@ async def send(ctx, *, message=None):
         await ctx.send(content=message, files=files)
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
-import discord
-from discord.ext import commands
-from discord import app_commands, ui
-import asyncio
-import os
 
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# --- Comando embed ---
+# --- Comando embed aggiornato ---
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
+    # Converti colore in int
     if colore:
         colore = colore.lstrip("#")
         try:
@@ -160,6 +151,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     else:
         colore_int = discord.Color.blue().value
 
+    # Prepara descrizione
     blocchi = contenuto.split(";;")
     descrizione = ""
     for blocco in blocchi:
@@ -180,7 +172,10 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
                 await interaction.response.send_message("❌ Solo chi ha creato l'embed può modificarlo!", ephemeral=True)
                 return
 
-            await interaction.response.send_message("📩 Inviami il nuovo contenuto (usa `;;` e `||` come prima):", ephemeral=True)
+            await interaction.response.send_message(
+                "📩 Inviami il nuovo contenuto e, se vuoi, un nuovo colore all'inizio (es. #FF0000 ;; ROSSO || Bianco):",
+                ephemeral=True
+            )
 
             def msg_check(m):
                 return m.author == ctx.author and isinstance(m.channel, discord.DMChannel)
@@ -192,6 +187,18 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
                 return
 
             nuovo_contenuto = dm_msg.content
+
+            # Controlla se l'utente ha indicato un nuovo colore
+            if nuovo_contenuto.startswith("#"):
+                try:
+                    nuova_riga = nuovo_contenuto.split(";;", 1)
+                    nuovo_colore = nuova_riga[0].lstrip("#")
+                    colore_int = int(nuovo_colore, 16)
+                    nuovo_contenuto = nuova_riga[1]  # rimane solo il contenuto
+                except Exception:
+                    await ctx.author.send("❌ Formato colore non valido, uso colore precedente.")
+
+            # Prepara nuova descrizione
             blocchi = nuovo_contenuto.split(";;")
             descrizione = ""
             for blocco in blocchi:
@@ -202,13 +209,11 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
                 descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
 
             embed.description = descrizione.strip()
+            embed.color = discord.Color(colore_int)
             await message.edit(embed=embed)
             await ctx.author.send("✅ Embed aggiornato!")
 
     await ctx.author.send("Il tuo embed è stato creato!", view=ModificaEmbed())
-
-bot.run(TOKEN)
-
 
 # --- Avvio bot con retry ---
 async def start_bot():
@@ -229,3 +234,4 @@ async def start_bot():
 
 if __name__ == "__main__":
     asyncio.run(start_bot())
+
