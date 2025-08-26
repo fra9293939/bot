@@ -3,8 +3,6 @@ from discord.ext import commands
 import os
 import asyncio
 from keep_alive import keep_alive
-import aiohttp
-from io import BytesIO
 
 # --- Config ---
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -90,6 +88,7 @@ async def socials(ctx):
     embed.set_thumbnail(url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Linktree_Logo.svg/512px-Linktree_Logo.svg.png")
     await ctx.send(embed=embed)
 
+# --- Lista comandi senza embed e send ---
 @bot.command(name="comandi")
 async def comandi(ctx):
     embed = discord.Embed(
@@ -102,8 +101,7 @@ async def comandi(ctx):
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
             "!socials - Tutti i link social\n"
-            "!comandi - Questa lista\n"
-            "!embed - Comando universale embed"
+            "!comandi - Questa lista"
         ),
         color=0xB500FF
     )
@@ -138,13 +136,7 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-from discord.ext import commands
-import discord
-import asyncio
-
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
-
-# Comando per creare embed
+# --- Comando universale embed con modifica tramite reaction ---
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     if colore:
@@ -203,7 +195,6 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
 
         except asyncio.TimeoutError:
             break
-
 
 # --- Avvio bot con retry ---
 async def start_bot():
