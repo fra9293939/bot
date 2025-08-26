@@ -144,7 +144,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     """
     Comando universale per embed con più righe rosse e testo bianco.
     Uso:
-    !embed #FF0000 DISCORD TOS || Rispetta le regole ;; REGOLA 2 || Altro testo
+    !embed #FF0000 REGOLA 1 || Testo bianco ;; REGOLA 2 || Altro testo
     Il colore è opzionale. Se non specificato, sarà blu.
     """
 
