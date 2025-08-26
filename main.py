@@ -3,7 +3,10 @@ from discord.ext import commands
 import os
 import asyncio
 from keep_alive import keep_alive
+import aiohttp
+from io import BytesIO
 
+# --- Config ---
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 PRO_BOT_ID = 282859044593598464
 TARGET_CHANNEL_ID = 1388623669886189628
@@ -12,14 +15,12 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# --- Eventi ---
 @bot.event
 async def on_ready():
     print(f"✅ Bot attivo come {bot.user}")
 
-import aiohttp
-from io import BytesIO
-
-# --- COMANDI DEL BOT ---
+# --- Comandi social ---
 @bot.command(name="twitch")
 async def twitch(ctx):
     embed = discord.Embed(
@@ -78,7 +79,7 @@ async def orari(ctx):
         color=0xB500FF
     )
     await ctx.send(embed=embed)
-    
+
 @bot.command(name="socials")
 async def socials(ctx):
     embed = discord.Embed(
@@ -101,12 +102,14 @@ async def comandi(ctx):
             "!discord / !ds - Link Discord\n"
             "!orari - Orario streaming\n"
             "!socials - Tutti i link social\n"
-            "!comandi - Questa lista"
+            "!comandi - Questa lista\n"
+            "!embed - Comando universale embed"
         ),
         color=0xB500FF
     )
     await ctx.send(embed=embed)
 
+# --- Comando send ---
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
@@ -135,26 +138,26 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-import discord
-from discord.ext import commands
-
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-
-
+# --- Comando universale embed ---
 @bot.command(name="embed")
-async def embed(ctx, *, contenuto: str):
+async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     """
     Comando universale per embed con più righe rosse e testo bianco.
-    Usa il separatore || tra testo rosso e testo bianco.
-    Esempio:
-    !embed DISCORD TOS || Si prega di rispettare i Termini di Servizio.
-    ;; REGOLA 2 || Testo della seconda regola in bianco.
+    Uso:
+    !embed #FF0000 DISCORD TOS || Rispetta le regole ;; REGOLA 2 || Altro testo
+    Il colore è opzionale. Se non specificato, sarà blu.
     """
+
+    # Converte il colore esadecimale
+    if colore:
+        colore = colore.lstrip("#")
+        try:
+            colore_int = int(colore, 16)
+        except ValueError:
+            await ctx.send("❌ Colore non valido! Usa esadecimale tipo #FF0000")
+            return
+    else:
+        colore_int = discord.Color.blue().value
 
     blocchi = contenuto.split(";;")  # separa più blocchi
     descrizione = ""
@@ -166,13 +169,11 @@ async def embed(ctx, *, contenuto: str):
         rosso, bianco = map(str.strip, blocco.split("||", 1))
         descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
 
-    embed = discord.Embed(color=discord.Color.blue())
-    embed.description = descrizione.strip()  # rimuove spazi extra finali
+    embed = discord.Embed(color=colore_int)
+    embed.description = descrizione.strip()
     await ctx.send(embed=embed)
 
-
-
-# --- Gestione connessione con retry e pausa se 429 ---
+# --- Avvio bot con retry ---
 async def start_bot():
     while True:
         try:
@@ -181,14 +182,13 @@ async def start_bot():
         except discord.HTTPException as e:
             if e.status == 429:
                 print("⚠️ Rate limit rilevato! Aspetto 15 minuti prima di riprovare...")
-                await asyncio.sleep(900)  # 15 minuti
+                await asyncio.sleep(900)
             else:
                 print(f"Errore HTTP: {e}")
-                await asyncio.sleep(60)  # Attende 1 minuto prima di riprovare
+                await asyncio.sleep(60)
         except Exception as e:
             print(f"Errore generico: {e}")
-            await asyncio.sleep(60)  # Attende 1 minuto prima di riprovare
+            await asyncio.sleep(60)
 
 if __name__ == "__main__":
     asyncio.run(start_bot())
-
