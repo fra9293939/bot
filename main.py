@@ -89,7 +89,7 @@ async def socials(ctx):
     embed.set_thumbnail(url="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Linktree_Logo.svg/512px-Linktree_Logo.svg.png")
     await ctx.send(embed=embed)
 
-# --- Lista comandi senza embed e send ---
+# --- Lista comandi pubblica (senza send e embed) ---
 @bot.command(name="comandi")
 async def comandi(ctx):
     embed = discord.Embed(
@@ -108,7 +108,7 @@ async def comandi(ctx):
     )
     await ctx.send(embed=embed)
 
-# --- Comando send ---
+# --- Comando send (solo per chi ha permessi) ---
 @bot.command(name="send")
 async def send(ctx, *, message=None):
     if not ctx.author.guild_permissions.manage_messages:
@@ -137,6 +137,7 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
+# --- Comando embed personalizzato (solo per chi ha permessi) ---
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     # Gestione colore
@@ -163,7 +164,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
     embed = discord.Embed(color=colore_int, description=descrizione.strip())
     message = await ctx.send(embed=embed)
 
-    # Pulsante per modificare **questo embed specifico**
+    # Pulsante per modificare questo embed
     class ModificaEmbed(ui.View):
         def __init__(self, message, autore):
             super().__init__(timeout=None)
@@ -206,7 +207,7 @@ async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
             await self.message.edit(embed=embed)
             await self.autore.send("✅ Embed aggiornato!")
 
-    # Invia DM all'autore con il pulsante per modificare questo embed
+    # Invia DM all'autore con il pulsante
     await ctx.author.send("Il tuo embed è stato creato!", view=ModificaEmbed(message, ctx.author))
 
 # --- Avvio bot con retry ---
@@ -228,4 +229,3 @@ async def start_bot():
 
 if __name__ == "__main__":
     asyncio.run(start_bot())
-
