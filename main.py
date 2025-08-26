@@ -138,40 +138,72 @@ async def send(ctx, *, message=None):
     else:
         await ctx.send("⚠️ Nessun messaggio o allegato da inviare.")
 
-# --- Comando universale embed ---
+from discord.ext import commands
+import discord
+import asyncio
+
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+
+# Comando per creare embed
 @bot.command(name="embed")
 async def embed_cmd(ctx, colore: str = None, *, contenuto: str):
-    """
-    Comando universale per embed con più righe rosse e testo bianco.
-    Uso:
-    !embed #FF0000 REGOLA 1 || Testo bianco ;; REGOLA 2 || Altro testo
-    Il colore è opzionale. Se non specificato, sarà blu.
-    """
-
-    # Converte il colore esadecimale
     if colore:
         colore = colore.lstrip("#")
         try:
             colore_int = int(colore, 16)
         except ValueError:
-            await ctx.send("❌ Colore non valido! Usa esadecimale tipo #FF0000")
+            await ctx.send("❌ Colore non valido!")
             return
     else:
         colore_int = discord.Color.blue().value
 
-    blocchi = contenuto.split(";;")  # separa più blocchi
+    blocchi = contenuto.split(";;")
     descrizione = ""
-
     for blocco in blocchi:
         if "||" not in blocco:
-            await ctx.send("❌ Ogni blocco deve avere '||' tra rosso e testo bianco!")
+            await ctx.send("❌ Ogni blocco deve avere '||'!")
             return
         rosso, bianco = map(str.strip, blocco.split("||", 1))
         descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
 
-    embed = discord.Embed(color=colore_int)
-    embed.description = descrizione.strip()
-    await ctx.send(embed=embed)
+    embed = discord.Embed(color=colore_int, description=descrizione.strip())
+    message = await ctx.send(embed=embed)
+
+    # Aggiunge reaction per modificare
+    await message.add_reaction("✏️")
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) == "✏️" and reaction.message.id == message.id
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for("reaction_add", timeout=3600.0, check=check)
+            
+            await ctx.author.send("📩 Inviami il nuovo contenuto dell'embed (usa `;;` e `||` come prima):")
+            
+            def msg_check(m):
+                return m.author == ctx.author and isinstance(m.channel, discord.DMChannel)
+
+            dm_msg = await bot.wait_for("message", check=msg_check, timeout=300.0)
+            nuovo_contenuto = dm_msg.content
+
+            blocchi = nuovo_contenuto.split(";;")
+            descrizione = ""
+            for blocco in blocchi:
+                if "||" not in blocco:
+                    await ctx.author.send("❌ Ogni blocco deve avere '||'!")
+                    return
+                rosso, bianco = map(str.strip, blocco.split("||", 1))
+                descrizione += f"```diff\n- {rosso}\n```\n{bianco}\n\n"
+
+            embed.description = descrizione.strip()
+            await message.edit(embed=embed)
+            await ctx.author.send("✅ Embed aggiornato!")
+            await message.remove_reaction("✏️", ctx.author)
+
+        except asyncio.TimeoutError:
+            break
+
 
 # --- Avvio bot con retry ---
 async def start_bot():
